@@ -1,0 +1,24 @@
+# Environment and secrets
+.env
+*.env.local
+
+# Docker volume mounts and persistent data
+data/
+logs/
+airflow_logs/
+
+# Python & virtualenv
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/

@@ -1,0 +1,43 @@
+{
+  "timestamp_utc": "2026-09-23T18:45:54.501623+00:00",
+  "benchmark_parameters": {
+    "target_events": 2000000,
+    "chunk_size": 100000,
+    "batch_count": 20,
+    "injected_duplicate_rate_pct": 0.5
+  },
+  "measured_metrics": {
+    "events_generated": 2010000,
+    "events_consumed": 2000000,
+    "events_per_sec": 423062.2,
+    "processing_latency_ms": {
+      "p50": 223.23,
+      "p95": 235.18,
+      "p99": 235.19
+    },
+    "end_to_end_freshness_lag_sec": {
+      "mean": 0.254,
+      "p95": 0.298
+    },
+    "failed_events": 0,
+    "duplicate_events_injected": 10000,
+    "duplicate_events_caught": 10000,
+    "deduplication_accuracy_pct": 100.0
+  },
+  "query_strategy_benchmark": {
+    "strategy_a": {
+      "name": "Raw Uncompacted CDC Scan with Window Deduplication",
+      "description": "Full partition scan with ROW_NUMBER() OVER (PARTITION BY order_id ORDER BY lsn DESC)",
+      "latency_ms": 254.49
+    },
+    "strategy_b": {
+      "name": "Compacted Iceberg Columnar Scan with Partition Pruning",
+      "description": "Direct columnar aggregation on pruned Iceberg partition date",
+      "latency_ms": 3.38
+    },
+    "comparison": {
+      "speedup_factor": "75.4x",
+      "latency_reduction_pct": "98.7%"
+    }
+  }
+}
