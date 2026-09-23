@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: lakeflow-demo
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: PORT
+        value: 8501
