@@ -1,8 +1,8 @@
 # FeatureHub Online Feature Store: Latency & Performance Benchmark
 
-**Evaluation Date**: `2026-09-24T18:44:32Z`  
+**Evaluation Date**: `2026-09-24T19:45:49Z`  
 **Test Sample Size**: `10,000` iterations across 3 entities (`customer`, `merchant`, `device`)  
-**Throughput**: **`5,995.65 Queries / Sec (QPS)`**  
+**Throughput**: **`14,995.38 Queries / Sec (QPS)`**  
 **SLA Compliance**: `PASS` (p99 < 10ms SLA target met)
 
 ---
@@ -11,13 +11,13 @@
 
 | Percentile | Latency (ms) | Target SLA | Status |
 | :--- | :---: | :---: | :---: |
-| **p50 (Median)** | **`0.1226 ms`** | `< 2.0 ms` |  PASS |
-| **p90** | **`0.1821 ms`** | `< 4.0 ms` |  PASS |
-| **p95** | **`0.2056 ms`** | `< 5.0 ms` |  PASS |
-| **p99** | **`0.3639 ms`** | `< 10.0 ms` |  PASS |
-| **p99.9** | **`1.055 ms`** | `< 25.0 ms` |  PASS |
-| **Mean** | **`0.1382 ms`** | `< 3.0 ms` |  PASS |
-| **Min / Max** | `0.0555 ms` / `3.668 ms` | - | - |
+| **p50 (Median)** | **`0.0512 ms`** | `< 2.0 ms` |  PASS |
+| **p90** | **`0.0704 ms`** | `< 4.0 ms` |  PASS |
+| **p95** | **`0.092 ms`** | `< 5.0 ms` |  PASS |
+| **p99** | **`0.1445 ms`** | `< 10.0 ms` |  PASS |
+| **p99.9** | **`0.2794 ms`** | `< 25.0 ms` |  PASS |
+| **Mean** | **`0.0582 ms`** | `< 3.0 ms` |  PASS |
+| **Min / Max** | `0.0466 ms` / `0.4623 ms` | - | - |
 
 ---
 
@@ -26,10 +26,10 @@
 
 | Percentile | Latency (ms) | Target SLA |
 | :--- | :---: | :---: |
-| **p50 (Median)** | **`0.1992 ms`** | `< 5.0 ms` |
-| **p95** | **`0.3588 ms`** | `< 10.0 ms` |
-| **p99** | **`0.6854 ms`** | `< 20.0 ms` |
-| **Mean** | **`0.2291 ms`** | `< 6.0 ms` |
+| **p50 (Median)** | **`0.0722 ms`** | `< 5.0 ms` |
+| **p95** | **`0.1149 ms`** | `< 10.0 ms` |
+| **p99** | **`0.2677 ms`** | `< 20.0 ms` |
+| **Mean** | **`0.0839 ms`** | `< 6.0 ms` |
 
 ---
 

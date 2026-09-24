@@ -1,24 +1,24 @@
 {
-  "benchmark_timestamp": "2026-09-24T18:44:32Z",
+  "benchmark_timestamp": "2026-09-24T19:45:49Z",
   "sample_size": 10000,
-  "queries_per_second": 5995.65,
+  "queries_per_second": 14995.38,
   "online_retrieval": {
-    "p50_ms": 0.1226,
-    "p90_ms": 0.1821,
-    "p95_ms": 0.2056,
-    "p99_ms": 0.3639,
-    "p99_9_ms": 1.055,
-    "mean_ms": 0.1382,
-    "min_ms": 0.0555,
-    "max_ms": 3.668,
-    "std_ms": 0.0777
+    "p50_ms": 0.0512,
+    "p90_ms": 0.0704,
+    "p95_ms": 0.092,
+    "p99_ms": 0.1445,
+    "p99_9_ms": 0.2794,
+    "mean_ms": 0.0582,
+    "min_ms": 0.0466,
+    "max_ms": 0.4623,
+    "std_ms": 0.0211
   },
   "end_to_end_prediction": {
     "sample_size": 2000,
-    "p50_ms": 0.1992,
-    "p95_ms": 0.3588,
-    "p99_ms": 0.6854,
-    "mean_ms": 0.2291
+    "p50_ms": 0.0722,
+    "p95_ms": 0.1149,
+    "p99_ms": 0.2677,
+    "mean_ms": 0.0839
   },
   "sla_compliance": {
     "p99_under_10ms": true,
