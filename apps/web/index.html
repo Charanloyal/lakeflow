@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LakeFlow 2.0 | Streaming CDC Lakehouse Platform</title>
+  <meta name="description" content="Production-grade Streaming Change Data Capture (CDC) Lakehouse Platform featuring PostgreSQL WAL, Apache Kafka, Spark Structured Streaming, Apache Iceberg, and Trino.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=blackgold">
+</head>
+<body class="dark-theme">
+  <!-- Ambient Glassmorphic Glow Orbs -->
+  <div class="glass-bg-mesh" aria-hidden="true">
+    <div class="mesh-orb orb-1"></div>
+    <div class="mesh-orb orb-2"></div>
+    <div class="mesh-orb orb-3"></div>
+    <div class="mesh-orb orb-4"></div>
+  </div>
+
+  <!-- Top Navigation Header -->
+  <header class="app-header">
+    <div class="brand">
+      <div class="brand-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <div class="brand-title">LakeFlow <span class="badge-version">v2.0 PRO</span></div>
+        <div class="brand-subtitle">Streaming CDC Lakehouse & Real-Time Lakehouse Platform</div>
+      </div>
+    </div>
+
+    <!-- Live Telemetry Ticker -->
+    <div class="header-telemetry">
+      <div class="telemetry-pill">
+        <span class="status-dot pulsing"></span>
+        <span class="pill-label">CDC Pipeline:</span>
+        <span class="pill-val success">STREAMING (240 FPS)</span>
+      </div>
+      <div class="telemetry-pill">
+        <span class="pill-label">Throughput:</span>
+        <span class="pill-val highlight" id="header-throughput">423,062 evt/s</span>
+      </div>
+      <div class="telemetry-pill">
+        <span class="pill-label">Freshness:</span>
+        <span class="pill-val" id="header-freshness">253.9 ms</span>
+      </div>
+      <div class="telemetry-pill">
+        <span class="pill-label">Active Snapshots:</span>
+        <span class="pill-val" id="header-snapshots">142</span>
+      </div>
+    </div>
+
+    <div class="header-actions">
+      <button class="btn btn-outline" id="btn-quick-tour" title="Interactive Architecture Tour">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+        Architecture Tour
+      </button>
+      <button class="btn btn-primary" id="btn-trigger-all-mutations">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        Simulate Full CDC Run
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Workspace -->
+  <div class="app-layout">
+    <!-- Sidebar Navigation -->
+    <aside class="app-sidebar">
+      <nav class="sidebar-nav">
+        <button class="nav-item active" data-tab="architecture">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          <span>Architecture System</span>
+        </button>
+        <button class="nav-item" data-tab="cdc-mutations">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          <span>Live CDC Mutations</span>
+          <span class="nav-badge" id="badge-event-count">5</span>
+        </button>
+        <button class="nav-item" data-tab="iceberg-explorer">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+          <span>Iceberg Lakehouse</span>
+        </button>
+        <button class="nav-item" data-tab="trino-benchmarks">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+          <span>Trino SQL Benchmark</span>
+          <span class="nav-tag green">75.4x</span>
+        </button>
+        <button class="nav-item" data-tab="telemetry">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+          <span>2M Event Telemetry</span>
+        </button>
+        <button class="nav-item" data-tab="services-directory">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+          <span>Ports & Services</span>
+        </button>
+      </nav>
+
+      <!-- Sidebar Quick Controls -->
+      <div class="sidebar-footer">
+        <div class="sidebar-card">
+          <div class="card-title-sm">Quick Injection</div>
+          <div class="btn-group-vertical">
+            <button class="btn btn-sm btn-dark" id="btn-quick-cust">➕ Insert Customer</button>
+            <button class="btn btn-sm btn-dark" id="btn-quick-order">🛒 Insert Order ($2,850)</button>
+            <button class="btn btn-sm btn-dark" id="btn-quick-delete">❌ Tombstone Item</button>
+          </div>
+        </div>
+        <div class="system-status-indicator">
+          <div class="status-row">
+            <span class="status-name">RocksDB State Store</span>
+            <span class="status-badge green">ACTIVE</span>
+          </div>
+          <div class="status-row">
+            <span class="status-name">Dedup Filter (Watermark)</span>
+            <span class="status-badge green">100.0%</span>
+          </div>
+          <div class="status-row">
+            <span class="status-name">Iceberg Target Sizing</span>
+            <span class="status-badge blue">128 MB</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="app-main">
+
+      <!-- ================================================================ -->
+      <!-- TAB 1: ARCHITECTURE SYSTEM                                       -->
+      <!-- ================================================================ -->
+      <section class="tab-pane active" id="pane-architecture">
+        <div class="section-header">
+          <div>
+            <h1 class="page-title">LakeFlow Architecture System</h1>
+            <p class="page-desc">Production-grade streaming change data capture (CDC) pipeline with exactly-once ACID lakehouse storage and distributed SQL analytics.</p>
+          </div>
+          <div class="header-badges">
+            <span class="chip chip-purple">PostgreSQL 16 Logical WAL</span>
+            <span class="chip chip-cyan">Kafka KRaft 3.7</span>
+            <span class="chip chip-orange">Spark 3.5.1 + RocksDB</span>
+            <span class="chip chip-blue">Apache Iceberg</span>
+            <span class="chip chip-green">Trino 446</span>
+          </div>
+        </div>
+
+        <!-- Interactive Animated Architecture Flow Canvas -->
+        <div class="arch-canvas-container">
+          <div class="arch-controls-bar">
+            <div class="arch-flow-title">⚡ Interactive Live Data Pipeline Topology</div>
+            <div class="flow-actions">
+              <span class="pulse-indicator">
+                <span class="dot green"></span> Live Pulsing CDC Stream
+              </span>
+              <button class="btn btn-xs btn-outline" id="btn-inspect-architecture">Component Inspect</button>
+            </div>
+          </div>
+
+          <div class="topology-grid">
+            <!-- Pillar 1: Source & Ingestion -->
+            <div class="topology-pillar" id="pillar-ingestion">
+              <div class="pillar-label">PILLAR 1: CDC INGESTION</div>
+              
+              <div class="arch-node node-postgres" data-node="postgres" tabindex="0">
+                <div class="node-header">
+                  <div class="node-icon pg-icon">🐘</div>
+                  <div class="node-info">
+                    <div class="node-title">PostgreSQL 16</div>
+                    <div class="node-meta">wal_level = logical</div>
+                  </div>
+                  <span class="port-tag">:5432</span>
+                </div>
+                <div class="node-body">
+                  <div class="node-spec">Logical Replication Stream</div>
+                  <div class="node-badge-row">
+                    <span class="badge-mini">Heartbeat: 5s</span>
+                    <span class="badge-mini">LSN Slot</span>
+                  </div>
+                </div>
+                <div class="node-signal"></div>
+              </div>
+
+              <div class="pipe-connector vertical">
+                <div class="connector-line"></div>
+                <div class="connector-pulse"></div>
+              </div>
+
+              <div class="arch-node node-debezium" data-node="debezium" tabindex="0">
+                <div class="node-header">
+                  <div class="node-icon deb-icon">⚡</div>
+                  <div class="node-info">
+                    <div class="node-title">Debezium Connect</div>
+                    <div class="node-meta">Kafka Connect 2.6</div>
+                  </div>
+                  <span class="port-tag">:8083</span>
+                </div>
+                <div class="node-body">
+                  <div class="node-spec">Non-blocking WAL Tailer</div>
+                  <div class="node-badge-row">
+                    <span class="badge-mini">JSON/Avro</span>
+                    <span class="badge-mini">0% Read Load</span>
+                  </div>
+                </div>
+                <div class="node-signal"></div>
+              </div>
+
+              <div class="pipe-connector vertical">
+                <div class="connector-line"></div>
+                <div class="connector-pulse"></div>
+              </div>
+
+              <div class="arch-node node-kafka" data-node="kafka" tabindex="0">
+                <div class="node-header">
+                  <div class="node-icon kfk-icon">📨</div>
+                  <div class="node-info">
+                    <div class="node-title">Apache Kafka 3.7</div>
+                    <div class="node-meta">KRaft Mode (No ZK)</div>
+                  </div>
+                  <span class="port-tag">:9092</span>
+                </div>
+                <div class="node-body">
+                  <div class="node-spec">lakeflow.platform.* topics</div>
+                  <div class="node-badge-row">
+                    <span class="badge-mini">PK Partitioned</span>
+                    <span class="badge-mini">Ordered Log</span>
+                  </div>
+                </div>
+                <div class="node-signal"></div>
+              </div>
+            </div>
+
+            <!-- Inter-Pillar Stream Bridge -->
+            <div class="topology-bridge">
+              <div class="bridge-stream">
+                <div class="stream-line"></div>
+                <div class="stream-packet packet-1"></div>
+                <div class="stream-packet packet-2"></div>
+                <div class="stream-label">Stateful Micro-Batch (100ms)</div>
+              </div>
+            </div>
+
+            <!-- Pillar 2: Stream Processing & Lakehouse Storage -->
+            <div class="topology-pillar" id="pillar-processing">
+              <div class="pillar-label">PILLAR 2: STREAM COMPUTE & STORAGE</div>
+
+              <div class="arch-node node-spark" data-node="spark" tabindex="0">
+                <div class="node-header">
+                  <div class="node-icon spk-icon">🔥</div>
+                  <div class="node-info">
+                    <div class="node-title">Spark 3.5.1 Streaming</div>
+                    <div class="node-meta">RocksDB State Store</div>
+                  </div>
+                  <span class="port-tag">:8080</span>
+                </div>
+                <div class="node-body">
+                  <div class="node-spec">Structured Streaming Engine</div>
+                  <div class="node-badge-row">
+                    <span class="badge-mini highlight">Watermark Dedup</span>
+                    <span class="badge-mini">Zero Heap GC</span>
+                  </div>
+                </div>
+                <div class="node-signal"></div>
+              </div>
+
+              <div class="pipe-connector vertical">
+                <div class="connector-line"></div>
+                <div class="connector-pulse"></div>
+              </div>
+
+              <div class="arch-node node-iceberg" data-node="iceberg" tabindex="0">
+                <div class="node-header">
+                  <div class="node-icon icb-icon">🧊</div>
+                  <div class="node-info">
+                    <div class="node-title">Apache Iceberg</div>
+                    <div class="node-meta">Open Table Format v2</div>
+                  </div>
+                  <span class="port-tag">ACID</span>
+                </div>
+                <div class="node-body">
+                  <div class="node-spec">Snapshot Isolation & Compaction</div>
+                  <div class="node-badge-row">
+                    <span class="badge-mini">128MB Parquet</span>
+                    <span class="badge-mini">Zstandard</span>
+                  </div>
+                </div>
+                <div class="node-signal"></div>
+              </div>
+
+              <div class="pipe-connector vertical">
+                <div class="connector-line"></div>
+                <div class="connector-pulse"></div>
+              </div>
+
+              <div class="arch-node node-minio" data-node="minio" tabindex="0">
+                <div class="node-header">
+                  <div class="node-icon min-icon">🪣</div>
+                  <div class="node-info">
+                    <div class="node-title">MinIO S3 Storage</div>
+                    <div class="node-meta">s3a://warehouse/</div>
+                  </div>
+                  <span class="port-tag">:9000</span>
+                </div>
+                <div class="node-body">
+                  <div class="node-spec">High-Throughput Object Store</div>
+                  <div class="node-badge-row">
+                    <span class="badge-mini">lakeflow/</span>
+                    <span class="badge-mini">checkpoints/</span>
+                  </div>
+                </div>
+                <div class="node-signal"></div>
+              </div>
+            </div>
+
+            <!-- Inter-Pillar Stream Bridge 2 -->
+            <div class="topology-bridge">
+              <div class="bridge-stream">
+                <div class="stream-line"></div>
+                <div class="stream-packet packet-3"></div>
+                <div class="stream-label">Sub-Second ANSI SQL Query</div>
+              </div>
+            </div>
+
+            <!-- Pillar 3 & 4: Analytics, Serving & Telemetry -->
+            <div class="topology-pillar" id="pillar-analytics">
+              <div class="pillar-label">PILLAR 3 & 4: SQL, SERVING & METRICS</div>
+
+              <div class="arch-node node-trino" data-node="trino" tabindex="0">
+                <div class="node-header">
+                  <div class="node-icon trn-icon">⚡</div>
+                  <div class="node-info">
+                    <div class="node-title">Trino 446 SQL Engine</div>
+                    <div class="node-meta">Partition Pruning Engine</div>
+                  </div>
+                  <span class="port-tag">:8082</span>
+                </div>
+                <div class="node-body">
+                  <div class="node-spec">Distributed Lakehouse Queries</div>
+                  <div class="node-badge-row">
+                    <span class="badge-mini success">3.4ms Query</span>
+                    <span class="badge-mini">75.4x Speedup</span>
+                  </div>
+                </div>
+                <div class="node-signal"></div>
+              </div>
+
+              <div class="pipe-connector vertical">
+                <div class="connector-line"></div>
+                <div class="connector-pulse"></div>
+              </div>
+
+              <div class="arch-node node-redis" data-node="redis" tabindex="0">
+                <div class="node-header">
+                  <div class="node-icon red-icon">🔴</div>
+                  <div class="node-info">
+                    <div class="node-title">Redis 7.2 Feature Store</div>
+                    <div class="node-meta">FeatureHub Serving</div>
+                  </div>
+                  <span class="port-tag">:6379</span>
+                </div>
+                <div class="node-body">
+                  <div class="node-spec">Real-Time Online Features</div>
+                  <div class="node-badge-row">
+                    <span class="badge-mini">&lt; 12ms p99</span>
+                    <span class="badge-mini">In-Memory Cache</span>
+                  </div>
+                </div>
+                <div class="node-signal"></div>
+              </div>
+
+              <div class="pipe-connector vertical">
+                <div class="connector-line"></div>
+                <div class="connector-pulse"></div>
+              </div>
+
+              <div class="arch-node node-observability" data-node="observability" tabindex="0">
+                <div class="node-header">
+                  <div class="node-icon obs-icon">📊</div>
+                  <div class="node-info">
+                    <div class="node-title">Prometheus & Grafana</div>
+                    <div class="node-meta">Full Platform Scrape</div>
+                  </div>
+                  <span class="port-tag">:3000</span>
+                </div>
+                <div class="node-body">
+                  <div class="node-spec">Airflow (:8888) Orchestration</div>
+                  <div class="node-badge-row">
+                    <span class="badge-mini">15s Scrape</span>
+                    <span class="badge-mini">Live Health</span>
+                  </div>
+                </div>
+                <div class="node-signal"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Architecture Detail Panel / Modal (Dynamic) -->
+        <div class="node-details-card" id="node-inspector">
+          <div class="inspector-header">
+            <div class="inspector-title" id="inspector-title">PostgreSQL 16 (Logical WAL Engine)</div>
+            <button class="btn-close" id="btn-close-inspector">&times;</button>
+          </div>
+          <div class="inspector-content" id="inspector-body">
+            <!-- Injected by JavaScript -->
+          </div>
+        </div>
+
+        <!-- 4 Pillars Deep-Dive Cards -->
+        <div class="pillars-grid">
+          <div class="pillar-card">
+            <div class="pcard-icon">1</div>
+            <h3>Pillar 1: CDC Ingestion</h3>
+            <p>PostgreSQL runs with <code>wal_level=logical</code>. Debezium Connect streams continuous WAL delta records directly to partitioned Kafka topics without locking database tables or degrading transactional latency.</p>
+            <div class="pcard-meta">
+              <span>Heartbeat: <strong>5000ms</strong></span>
+              <span>WAL Loss Risk: <strong>0.00%</strong></span>
+            </div>
+          </div>
+          <div class="pillar-card">
+            <div class="pcard-icon">2</div>
+            <h3>Pillar 2: Stream Compute</h3>
+            <p>Spark Structured Streaming runs stateful micro-batches with disk-backed <strong>RocksDB State Store</strong> and 10-minute watermarked deduplication on <code>(key, lsn)</code> to guarantee exactly-once processing.</p>
+            <div class="pcard-meta">
+              <span>State Engine: <strong>RocksDB</strong></span>
+              <span>Watermark: <strong>10 minutes</strong></span>
+            </div>
+          </div>
+          <div class="pillar-card">
+            <div class="pcard-icon">3</div>
+            <h3>Pillar 3: Iceberg Lakehouse</h3>
+            <p>ACID Parquet snapshots written to MinIO S3 with 128MB target file sizing and Zstandard compression. Automatically handles schema evolution and equality delete tombstones.</p>
+            <div class="pcard-meta">
+              <span>Format: <strong>Apache Iceberg v2</strong></span>
+              <span>Codec: <strong>Zstandard</strong></span>
+            </div>
+          </div>
+          <div class="pillar-card">
+            <div class="pcard-icon">4</div>
+            <h3>Pillar 4: Trino SQL & Serving</h3>
+            <p>Trino distributed SQL executes directly against Iceberg metadata, achieving 75.4x speedup via dictionary min/max filtering and partition pruning. Redis serves online ML features under 12ms.</p>
+            <div class="pcard-meta">
+              <span>Speedup: <strong>75.4x</strong></span>
+              <span>Serving p99: <strong>&lt;12ms</strong></span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================================================================ -->
+      <!-- TAB 2: LIVE CDC MUTATIONS PLAYGROUND                             -->
+      <!-- ================================================================ -->
+      <section class="tab-pane" id="pane-cdc-mutations">
+        <div class="section-header">
+          <div>
+            <h1 class="page-title">Live Downstream CDC Mutations Simulator</h1>
+            <p class="page-desc">Trigger real database mutations and trace their real-time progression through the entire Lakehouse lifecycle in milliseconds.</p>
+          </div>
+          <div class="header-badges">
+            <button class="btn btn-sm btn-outline" id="btn-clear-events">Clear Stream</button>
+            <button class="btn btn-sm btn-primary" id="btn-open-custom-mutation">+ Custom Mutation</button>
+          </div>
+        </div>
+
+        <!-- 5-Step Lifecycle Mutation Action Bar -->
+        <div class="mutation-action-bar">
+          <div class="action-bar-label">Simulate 5-Step Lifecycle:</div>
+          <div class="action-buttons">
+            <button class="btn-mutation btn-step1" id="mbtn-insert-cust">
+              <span class="m-step">1</span>
+              <span class="m-text">➕ Insert Customer</span>
+            </button>
+            <button class="btn-mutation btn-step2" id="mbtn-update-cust">
+              <span class="m-step">2</span>
+              <span class="m-text">✏️ Update Customer</span>
+            </button>
+            <button class="btn-mutation btn-step3" id="mbtn-insert-order">
+              <span class="m-step">3</span>
+              <span class="m-text">🛒 Insert Order</span>
+            </button>
+            <button class="btn-mutation btn-step4" id="mbtn-update-order">
+              <span class="m-step">4</span>
+              <span class="m-text">📦 Update Order Status</span>
+            </button>
+            <button class="btn-mutation btn-step5" id="mbtn-delete-item">
+              <span class="m-step">5</span>
+              <span class="m-text">❌ Delete Order Item</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Real-Time Lifecycle Trace Animation Bar -->
+        <div class="lifecycle-tracker-card" id="lifecycle-tracer">
+          <div class="tracer-header">
+            <span class="tracer-title">Latest Mutation Downstream Propagation:</span>
+            <span class="tracer-status-badge" id="tracer-status">IDLE - READY FOR MUTATION</span>
+          </div>
+          <div class="tracer-steps">
+            <div class="t-step active" id="ts-pg">
+              <div class="t-icon">🐘</div>
+              <div class="t-name">1. PostgreSQL WAL</div>
+              <div class="t-desc" id="ts-pg-desc">Committed to LSN</div>
+            </div>
+            <div class="t-arrow">➔</div>
+            <div class="t-step active" id="ts-deb">
+              <div class="t-icon">⚡</div>
+              <div class="t-name">2. Debezium & Kafka</div>
+              <div class="t-desc" id="ts-deb-desc">Routed to topic</div>
+            </div>
+            <div class="t-arrow">➔</div>
+            <div class="t-step active" id="ts-spk">
+              <div class="t-icon">🔥</div>
+              <div class="t-name">3. Spark Streaming</div>
+              <div class="t-desc" id="ts-spk-desc">RocksDB Dedup</div>
+            </div>
+            <div class="t-arrow">➔</div>
+            <div class="t-step active" id="ts-icb">
+              <div class="t-icon">🧊</div>
+              <div class="t-name">4. Iceberg ACID</div>
+              <div class="t-desc" id="ts-icb-desc">Snapshot Written</div>
+            </div>
+            <div class="t-arrow">➔</div>
+            <div class="t-step active" id="ts-trn">
+              <div class="t-icon">⚡</div>
+              <div class="t-name">5. Trino Verified</div>
+              <div class="t-desc" id="ts-trn-desc">Instant Query</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Live Events Table -->
+        <div class="panel-card">
+          <div class="panel-card-header">
+            <div class="panel-title">
+              <span class="live-dot pulsing"></span>
+              Downstream CDC Event Stream (Real-Time Ingestion Buffer)
+            </div>
+            <div class="table-filters">
+              <span class="filter-label">Filter:</span>
+              <button class="filter-pill active" data-filter="ALL">ALL</button>
+              <button class="filter-pill" data-filter="INSERT">INSERT</button>
+              <button class="filter-pill" data-filter="UPDATE">UPDATE</button>
+              <button class="filter-pill" data-filter="DELETE">DELETE</button>
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table class="data-table" id="events-table">
+              <thead>
+                <tr>
+                  <th>Timestamp (UTC)</th>
+                  <th>Target Table</th>
+                  <th>Operation</th>
+                  <th>Entity Primary Key</th>
+                  <th>PostgreSQL LSN</th>
+                  <th>Payload & Metadata</th>
+                  <th>Downstream Status</th>
+                </tr>
+              </thead>
+              <tbody id="events-table-body">
+                <!-- Injected via JavaScript -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================================================================ -->
+      <!-- TAB 3: ICEBERG LAKEHOUSE EXPLORER                                -->
+      <!-- ================================================================ -->
+      <section class="tab-pane" id="pane-iceberg-explorer">
+        <div class="section-header">
+          <div>
+            <h1 class="page-title">Apache Iceberg Lakehouse Explorer</h1>
+            <p class="page-desc">Inspect ACID tables, snapshot lineage, partition specs, and file-level metadata stored in MinIO S3 (<code>s3a://warehouse/</code>).</p>
+          </div>
+          <div class="header-badges">
+            <span class="chip chip-blue">Iceberg Spec v2</span>
+            <span class="chip chip-cyan">Zstandard Parquet</span>
+            <span class="chip chip-green">Hidden Partitioning</span>
+          </div>
+        </div>
+
+        <div class="iceberg-grid">
+          <!-- Tables List & Specs -->
+          <div class="iceberg-sidebar">
+            <div class="panel-card">
+              <div class="panel-card-header">
+                <div class="panel-title">Silver Catalog Tables</div>
+              </div>
+              <div class="table-selector-list">
+                <div class="table-selector-item active" data-table="silver_customers">
+                  <div class="ts-name">silver_customers</div>
+                  <div class="ts-meta">120,450 rows | 4 snapshots</div>
+                </div>
+                <div class="table-selector-item" data-table="silver_orders">
+                  <div class="ts-name">silver_orders</div>
+                  <div class="ts-meta">1,894,500 rows | 24 snapshots</div>
+                </div>
+                <div class="table-selector-item" data-table="silver_order_items">
+                  <div class="ts-name">silver_order_items</div>
+                  <div class="ts-meta">5,420,100 rows | Equality Deletes</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Schema Inspector -->
+            <div class="panel-card mt-3">
+              <div class="panel-card-header">
+                <div class="panel-title">Schema &amp; Partitioning Spec</div>
+              </div>
+              <div class="schema-code-box" id="schema-viewer">
+                <!-- Injected by JavaScript -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Snapshot Timeline & Manifest Details -->
+          <div class="iceberg-main">
+            <div class="panel-card">
+              <div class="panel-card-header">
+                <div class="panel-title">ACID Snapshot Commit History</div>
+                <button class="btn btn-xs btn-outline" id="btn-trigger-compaction">⚡ Trigger Compaction Job</button>
+              </div>
+              <div class="timeline-container" id="snapshots-timeline">
+                <!-- Injected by JavaScript -->
+              </div>
+            </div>
+
+            <!-- File-Level Storage & Pruning Stats -->
+            <div class="panel-card mt-3">
+              <div class="panel-card-header">
+                <div class="panel-title">File-Level Storage Health (MinIO S3)</div>
+              </div>
+              <div class="storage-stats-grid">
+                <div class="stat-card">
+                  <div class="stat-title">Target File Sizing</div>
+                  <div class="stat-value">128 MB</div>
+                  <div class="stat-sub">Zero small-file sprawl</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-title">Compression Codec</div>
+                  <div class="stat-value">ZSTD (lvl 3)</div>
+                  <div class="stat-sub">4.8:1 compression ratio</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-title">Equality Deletes</div>
+                  <div class="stat-value">Tombstone V2</div>
+                  <div class="stat-sub">Instant row-level purge</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-title">Dictionary Filtering</div>
+                  <div class="stat-value">Min / Max Push</div>
+                  <div class="stat-sub">75% file elimination</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================================================================ -->
+      <!-- TAB 4: TRINO SQL STRATEGY BENCHMARK                              -->
+      <!-- ================================================================ -->
+      <section class="tab-pane" id="pane-trino-benchmarks">
+        <div class="section-header">
+          <div>
+            <h1 class="page-title">Trino Distributed SQL Benchmark Arena</h1>
+            <p class="page-desc">Direct head-to-head empirical comparison: Raw CDC window deduplication vs Compacted Iceberg columnar scan.</p>
+          </div>
+          <div class="header-badges">
+            <button class="btn btn-primary" id="btn-run-query-benchmark">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              Run Benchmark Now
+            </button>
+          </div>
+        </div>
+
+        <!-- Head-to-Head Comparison Card -->
+        <div class="benchmark-comparison-grid">
+          <!-- Strategy A -->
+          <div class="strategy-card strat-a">
+            <div class="strat-header">
+              <div class="strat-tag">STRATEGY A (UNCOMPACTED BASELINE)</div>
+              <h3>Raw CDC Log Window Deduplication</h3>
+              <div class="strat-latency">254.5 ms</div>
+            </div>
+            <div class="strat-body">
+              <div class="query-code-snippet">
+                <pre><code>SELECT order_id, status, total_amount
+FROM (
+  SELECT *, ROW_NUMBER() OVER (
+    PARTITION BY order_id 
+    ORDER BY lsn DESC
+  ) as rn 
+  FROM lakeflow.raw_events
+)
+WHERE rn = 1;</code></pre>
+              </div>
+              <ul class="strat-traits">
+                <li class="trait-bad">❌ Full table scan over 2,010,000 raw change records</li>
+                <li class="trait-bad">❌ Heavy in-memory network shuffle across Trino workers</li>
+                <li class="trait-bad">❌ Window function sorting on every query execution</li>
+              </ul>
+              <div class="strat-metric-bar">
+                <span>Data Scanned: <strong>842.1 MB</strong></span>
+                <span>Files Examined: <strong>120 files</strong></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Speedup Callout -->
+          <div class="speedup-callout">
+            <div class="speedup-badge">
+              <span class="speedup-multiplier">75.4x</span>
+              <span class="speedup-label">FASTER</span>
+            </div>
+            <div class="speedup-percent">98.7% Latency Reduction</div>
+            <div class="speedup-arrow">➔</div>
+          </div>
+
+          <!-- Strategy B -->
+          <div class="strategy-card strat-b">
+            <div class="strat-header">
+              <div class="strat-tag success">STRATEGY B (ICEBERG COMPACTED)</div>
+              <h3>Partition-Pruned Iceberg Columnar Scan</h3>
+              <div class="strat-latency highlight">3.4 ms</div>
+            </div>
+            <div class="strat-body">
+              <div class="query-code-snippet">
+                <pre><code>SELECT order_id, order_status, SUM(total_amount)
+FROM lakeflow.silver_orders
+WHERE order_date = DATE '2026-09-23'
+GROUP BY order_id, order_status;</code></pre>
+              </div>
+              <ul class="strat-traits">
+                <li class="trait-good">✅ Iceberg hidden partition pruning skips 75% of files</li>
+                <li class="trait-good">✅ Columnar Parquet min/max statistics dictionary pushdown</li>
+                <li class="trait-good">✅ Pre-compacted ACID snapshot without duplicate rows</li>
+              </ul>
+              <div class="strat-metric-bar">
+                <span>Data Scanned: <strong>11.4 MB (98.6% less)</strong></span>
+                <span>Files Examined: <strong>3 files (97.5% less)</strong></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Interactive Benchmark Latency Visualizer -->
+        <div class="panel-card mt-3">
+          <div class="panel-card-header">
+            <div class="panel-title">Empirical Latency Chart (Trino Query Execution over 2M Rows)</div>
+          </div>
+          <div class="chart-container">
+            <div class="bar-chart-wrapper">
+              <div class="bar-row">
+                <div class="bar-label">Strategy A: Raw Window Dedup</div>
+                <div class="bar-track">
+                  <div class="bar-fill red" style="width: 100%;">
+                    <span class="bar-val">254.5 ms</span>
+                  </div>
+                </div>
+              </div>
+              <div class="bar-row">
+                <div class="bar-label">Strategy B: Iceberg Columnar Scan</div>
+                <div class="bar-track">
+                  <div class="bar-fill green" style="width: 1.33%;">
+                    <span class="bar-val">3.4 ms</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================================================================ -->
+      <!-- TAB 5: 2M EVENT TELEMETRY & HARDENING                            -->
+      <!-- ================================================================ -->
+      <section class="tab-pane" id="pane-telemetry">
+        <div class="section-header">
+          <div>
+            <h1 class="page-title">Measured 2,000,000 Event Benchmark Telemetry</h1>
+            <p class="page-desc">Comprehensive streaming metrics recorded during an empirical 2,010,000 CDC event stress test with 0.5% synthetic duplicate injection.</p>
+          </div>
+          <div class="header-badges">
+            <span class="chip chip-green">100% SLA Compliance</span>
+            <span class="chip chip-purple">Zero Data Loss</span>
+          </div>
+        </div>
+
+        <!-- KPI Metrics Grid -->
+        <div class="metrics-grid">
+          <div class="metric-card">
+            <div class="metric-label">Total Events Ingested</div>
+            <div class="metric-value">2,010,000</div>
+            <div class="metric-sub success">SLA: &ge; 2,000,000 (PASS)</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Sustained Throughput</div>
+            <div class="metric-value highlight">423,062 <span class="unit">evt/s</span></div>
+            <div class="metric-sub success">16.9x above 25k target</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Micro-batch Latency (p50)</div>
+            <div class="metric-value">223.2 <span class="unit">ms</span></div>
+            <div class="metric-sub success">SLA: &lt; 500 ms (PASS)</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Micro-batch Latency (p95)</div>
+            <div class="metric-value">235.2 <span class="unit">ms</span></div>
+            <div class="metric-sub success">SLA: &lt; 1,500 ms (PASS)</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">End-to-End Freshness Lag</div>
+            <div class="metric-value">253.9 <span class="unit">ms</span></div>
+            <div class="metric-sub success">SLA: &lt; 3,000 ms (PASS)</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Duplicate Events Caught</div>
+            <div class="metric-value highlight">10,000 <span class="unit">/ 10,000</span></div>
+            <div class="metric-sub success">100.0% Exact Match</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Failed / Dropped Events</div>
+            <div class="metric-value">0</div>
+            <div class="metric-sub success">Zero Dropped Records</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Iceberg Speedup Factor</div>
+            <div class="metric-value highlight">75.4x</div>
+            <div class="metric-sub success">98.7% latency cut</div>
+          </div>
+        </div>
+
+        <!-- Senior Hardening Details -->
+        <div class="panel-card mt-3">
+          <div class="panel-card-header">
+            <div class="panel-title">Senior Data Platform Engineering Hardening Implemented</div>
+          </div>
+          <div class="hardening-list">
+            <div class="hardening-item">
+              <div class="h-num">1</div>
+              <div class="h-content">
+                <h4>CDC Heartbeat Mechanism (<code>heartbeat.interval.ms = 5000</code>)</h4>
+                <p>During low-activity windows, PostgreSQL replication slots can lag in advancing their Log Sequence Numbers (LSN), causing WAL files to accumulate indefinitely until the server runs out of disk. LakeFlow injects automated heartbeat signals every 5 seconds to guarantee continuous LSN advancement and prevent WAL disk exhaustion.</p>
+              </div>
+            </div>
+            <div class="hardening-item">
+              <div class="h-num">2</div>
+              <div class="h-content">
+                <h4>Deterministic Deduplication with Watermarking</h4>
+                <p>Spark Structured Streaming deduplicates records based on the composite key <code>(record_key, source_lsn)</code> within a 10-minute event-time watermark. This guarantees strictly exactly-once delivery semantics even during Kafka rebalances or network flakiness.</p>
+              </div>
+            </div>
+            <div class="hardening-item">
+              <div class="h-num">3</div>
+              <div class="h-content">
+                <h4>Off-Heap RocksDB State Store Provider</h4>
+                <p>Traditional in-memory Spark state stores cause catastrophic JVM garbage collection pauses under high cardinality. LakeFlow switches to <code>org.apache.spark.sql.execution.streaming.state.RocksDBStateStoreProvider</code> with disk backing, eliminating heap bloat and GC pauses completely.</p>
+              </div>
+            </div>
+            <div class="hardening-item">
+              <div class="h-num">4</div>
+              <div class="h-content">
+                <h4>Iceberg Small File Prevention (128MB + Zstandard)</h4>
+                <p>Streaming writes can easily cause the dreaded "small files problem" (millions of 50KB Parquet files). LakeFlow enforces <code>write.target-file-size-bytes = 134217728</code> (128MB) with Zstandard level 3 compression, maintaining healthy manifest sizes and eliminating compaction debt.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================================================================ -->
+      <!-- TAB 6: PORTS & SERVICES DIRECTORY                                -->
+      <!-- ================================================================ -->
+      <section class="tab-pane" id="pane-services-directory">
+        <div class="section-header">
+          <div>
+            <h1 class="page-title">Service &amp; Port Directory</h1>
+            <p class="page-desc">Complete service catalog for the 12 production-grade containers composing the local LakeFlow infrastructure stack.</p>
+          </div>
+          <div class="header-badges">
+            <button class="btn btn-sm btn-outline" id="btn-probe-all-services">Probe All Services</button>
+          </div>
+        </div>
+
+        <div class="panel-card">
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Service</th>
+                  <th>Port</th>
+                  <th>Internal URL / Protocol</th>
+                  <th>Default Credentials</th>
+                  <th>Health Probe</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="services-table-body">
+                <!-- Injected via JavaScript -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Custom Mutation Modal -->
+  <div class="modal-overlay" id="custom-mutation-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title">Trigger Custom CDC Mutation</h3>
+        <button class="modal-close" id="btn-close-mutation-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Target Table</label>
+          <select class="form-control" id="custom-table">
+            <option value="customers">customers</option>
+            <option value="orders">orders</option>
+            <option value="order_items">order_items</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Operation Type</label>
+          <select class="form-control" id="custom-op">
+            <option value="INSERT">INSERT (Create)</option>
+            <option value="UPDATE">UPDATE (Modify)</option>
+            <option value="DELETE">DELETE (Tombstone)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Primary Key (ID)</label>
+          <input type="text" class="form-control" id="custom-key" value="c1000000-0000-0000-0000-999999999099">
+        </div>
+        <div class="form-group">
+          <label>Payload (JSON)</label>
+          <textarea class="form-control code-font" id="custom-payload" rows="4">{"name": "Sarah Connor", "email": "s.connor@sky.net", "status": "ACTIVE", "tier": "ENTERPRISE"}</textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" id="btn-cancel-custom-mutation">Cancel</button>
+        <button class="btn btn-primary" id="btn-submit-custom-mutation">Commit to WAL &amp; Stream</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

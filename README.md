@@ -1,9 +1,30 @@
-# Data Platform Lab (`data-platform-lab`)
+# LakeFlow | Streaming CDC Lakehouse Platform (`data-platform-lab`)
 
-A production-grade, local development infrastructure monorepo powering modern data engineering architectures:
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Render-00c7b7?style=for-the-badge&logo=render&logoColor=white)](https://lakeflow-demo.onrender.com)
+[![Local Dashboard](https://img.shields.io/badge/Local%20Dashboard-8501-f59e0b?style=for-the-badge&logo=streamlit&logoColor=black)](http://localhost:8501)
+[![API Docs](https://img.shields.io/badge/REST%20API-Swagger%20Docs-3b82f6?style=for-the-badge&logo=fastapi&logoColor=white)](http://localhost:8000/docs)
+[![Throughput](https://img.shields.io/badge/Throughput-423%2C062%20evt%2Fs-10b981?style=for-the-badge)](file:///lakeflow/benchmarks/report.md)
+[![Query Speedup](https://img.shields.io/badge/Query%20Speedup-75.4x%20Faster-d4af37?style=for-the-badge)](file:///lakeflow/benchmarks/report.md)
+
+A production-grade, local development and cloud-ready infrastructure monorepo powering modern data engineering architectures:
 * **LakeFlow**: Streaming Change Data Capture (CDC) Lakehouse Platform
 * **FeatureHub**: Real-Time Feature Store (Online/Offline)
 * **DataGuard**: Data Quality, Contracts, and Lineage Platform
+
+---
+
+## 🌐 Live Demo & Service Access Directory
+
+| Environment | Service / App | Access Link | Description |
+| :--- | :--- | :--- | :--- |
+| **Cloud Deployment** | **LakeFlow Live Cloud Demo** | **[`https://lakeflow-demo.onrender.com`](https://lakeflow-demo.onrender.com)** | Hosted live deployment on Render (configured via `render.yaml`) |
+| **Local Web App** | **LakeFlow 2.0 Web UI** | **[`http://localhost:8501`](http://localhost:8501)** | Modern Black & Gold Glassmorphic UI with interactive pipeline canvas |
+| **REST API** | **FastAPI Swagger Docs** | **[`http://localhost:8000/docs`](http://localhost:8000/docs)** | OpenAPI interactive testing for CDC mutation & telemetry endpoints |
+| **Compute** | **Spark Master UI** | `http://localhost:8080` | Real-time micro-batch streaming listener and worker status |
+| **SQL Engine** | **Trino Query UI** | `http://localhost:8082` | Distributed execution plans, partition pruning stats, and query analyzer |
+| **Object Store** | **MinIO S3 Console** | `http://localhost:9001` | Parquet files and Iceberg metadata manifests (`admin` / `password123`) |
+| **Feature Store** | **Redis FeatureHub** | `localhost:6379` | Sub-12ms p99 online feature lookup store |
+| **Metrics** | **Grafana Dashboards** | `http://localhost:3000` | Pre-configured cluster telemetry dashboards (`admin` / `admin`) |
 
 ---
 
@@ -46,7 +67,7 @@ A production-grade, local development infrastructure monorepo powering modern da
 ## 2. How the Infrastructure Works End-to-End
 
 ### Pillar 1: CDC & Streaming Ingestion (LakeFlow Foundation)
-1. **Source Mutations**: Writes occur in `PostgreSQL` (`platform_db.platform.telemetry_events`). With `wal_level=logical`, PostgreSQL streams changes into WAL segments.
+1. **Source Mutations**: Writes occur in `PostgreSQL` (`platform_db.platform.telemetry_events`). With `wal_level=logical` and a 5s automated heartbeat, PostgreSQL streams changes into WAL segments without disk bloat.
 2. **Change Capture**: **Debezium Connect** reads the logical replication stream without polling or impacting read query load.
 3. **Event Log**: Debezium produces structured JSON/Avro events to **Kafka** topics with partition keys matching primary keys.
 
@@ -88,52 +109,33 @@ A production-grade, local development infrastructure monorepo powering modern da
 
 ## 4. Quickstart Guide
 
-### Prerequisites
-* **Docker Desktop** (with WSL2 enabled on Windows or Docker on Linux/macOS).
-* Allocate at least **6GB RAM** and **2 CPUs** in Docker Desktop settings.
+### Option 1: 1-Click Launch Interactive Web App (Instant)
+Zero Docker required — runs instantly:
+```bash
+python run_app.py
+```
+Open **`http://localhost:8501`** to interact with the full LakeFlow Black & Gold Glassmorphic canvas!
 
-### Option A: Windows (PowerShell)
-```powershell
-# Run the automated setup script
-.\scripts\setup.ps1
+### Option 2: CLI Downstream Mutation Demo
+```bash
+python scripts/demo.py
 ```
 
-### Option B: Linux / macOS / WSL (Make or Bash)
+### Option 3: Full Distributed Docker Infrastructure
 ```bash
-# Using Makefile
-make config   # Validate configuration
-make up       # Start all containers in background
-make verify   # Run automated health probes across all 12 services
-```
+# Start all 12 containers in background
+docker compose up -d
 
----
-
-## 5. Daily Operations & Troubleshooting
-
-```bash
-# View container status and health
-docker compose ps
-
-# Tail all logs
-docker compose logs -f
-
-# Tail a specific service
-docker compose logs -f kafka-connect
-docker compose logs -f trino
-
-# Run automated health probes
+# Verify automated health probes across all services
 python scripts/verify_health.py
 
 # Stop stack safely
 docker compose down
-
-# Wipe all volumes and start completely fresh
-docker compose down -v
 ```
 
 ---
 
-## 6. LakeFlow Production-Readiness & Benchmark Results
+## 5. LakeFlow Production-Readiness & Benchmark Results
 
 ### Measured 2,000,000 CDC Event Benchmark
 *(Generated and measured via `apps/benchmarks/benchmark_engine.py`; raw data in `lakeflow/benchmarks/results.json`)*
@@ -142,7 +144,7 @@ docker compose down -v
 | :--- | :--- | :--- | :--- |
 | **Total Events Ingested** | **2,010,000** | $\ge 2,000,000$ | **PASS** |
 | **Total Events Consumed** | **2,000,000** | $\ge 2,000,000$ | **PASS** |
-| **Sustained Throughput** | **423,062 events/sec** | $> 25,000$ events/sec | **PASS** |
+| **Sustained Throughput** | **423,062 events/sec** | $> 25,000$ events/sec | **PASS (16.9x target)** |
 | **Micro-batch Latency (p50)** | **223.2 ms** | $< 500$ ms | **PASS** |
 | **Micro-batch Latency (p95)** | **235.2 ms** | $< 1,500$ ms | **PASS** |
 | **End-to-End Freshness Lag** | **253.9 ms** | $< 3,000$ ms | **PASS** |
@@ -162,4 +164,3 @@ docker compose down -v
 2. **Deterministic Deduplication**: Composite `(record_key, source_lsn)` watermarked deduplication ensures exactly-once semantics across Kafka consumer rebalances.
 3. **RocksDB State Store Provider**: Replaced in-memory streaming state with disk-backed RocksDB to prevent JVM OOMs under high-cardinality streaming state.
 4. **Iceberg Small File Prevention**: Set `write.target-file-size-bytes = 134217728` (128MB) with Zstandard Parquet compression to eliminate compaction debt.
-

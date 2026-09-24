@@ -19,19 +19,79 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for modern enterprise look
+# Custom Black & Gold Glassmorphic CSS Theme
 st.markdown("""
 <style>
-    .metric-card {
-        background-color: #111827;
-        border: 1px solid #1f2937;
-        border-radius: 8px;
-        padding: 16px;
-        text-align: center;
+    /* Global Obsidian Black & Gold Ambient Background */
+    .stApp {
+        background: radial-gradient(circle at 15% 15%, rgba(212, 175, 55, 0.22) 0%, transparent 40%),
+                    radial-gradient(circle at 85% 20%, rgba(245, 158, 11, 0.18) 0%, transparent 45%),
+                    radial-gradient(circle at 50% 80%, rgba(180, 115, 20, 0.15) 0%, transparent 50%),
+                    #040406 !important;
+        color: #ffffff;
     }
-    .badge-insert { background-color: #065f46; color: #34d399; padding: 4px 8px; border-radius: 4px; font-weight: bold; }
-    .badge-update { background-color: #78350f; color: #fbbf24; padding: 4px 8px; border-radius: 4px; font-weight: bold; }
-    .badge-delete { background-color: #7f1d1d; color: #f87171; padding: 4px 8px; border-radius: 4px; font-weight: bold; }
+
+    /* Black & Gold Glass Cards */
+    div[data-testid="stMetric"] {
+        background: linear-gradient(135deg, rgba(255, 223, 128, 0.08) 0%, rgba(255, 255, 255, 0.015) 100%), rgba(14, 13, 10, 0.75) !important;
+        backdrop-filter: blur(20px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+        border: 1px solid rgba(212, 175, 55, 0.25) !important;
+        border-top: 1px solid rgba(255, 235, 160, 0.55) !important;
+        border-radius: 16px !important;
+        padding: 18px !important;
+        box-shadow: inset 0 1px 1px 0 rgba(255, 235, 160, 0.25), 0 16px 36px rgba(0, 0, 0, 0.7) !important;
+        transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+    div[data-testid="stMetric"]:hover {
+        transform: translateY(-2px);
+        border-color: rgba(251, 191, 36, 0.6) !important;
+    }
+    div[data-testid="stMetric"] label {
+        color: #fbbf24 !important;
+        font-weight: 700 !important;
+    }
+
+    /* Glass Sidebar */
+    section[data-testid="stSidebar"] {
+        background: linear-gradient(180deg, rgba(14, 13, 10, 0.85) 0%, rgba(8, 7, 5, 0.75) 100%) !important;
+        backdrop-filter: blur(24px) saturate(190%) !important;
+        border-right: 1px solid rgba(212, 175, 55, 0.25) !important;
+        box-shadow: 4px 0 28px rgba(0, 0, 0, 0.7) !important;
+    }
+
+    /* Gold Buttons */
+    .stButton > button {
+        background: linear-gradient(135deg, #fbbf24 0%, #d4af37 50%, #b45309 100%) !important;
+        color: #0b0904 !important;
+        font-weight: 800 !important;
+        border: 1px solid rgba(255, 245, 180, 0.7) !important;
+        border-top: 1px solid #ffffff !important;
+        border-radius: 10px !important;
+        box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.6), 0 4px 16px rgba(212, 175, 55, 0.4) !important;
+        transition: all 0.2s ease !important;
+        width: 100% !important;
+    }
+    .stButton > button:hover {
+        background: linear-gradient(135deg, #fef08a 0%, #fbbf24 50%, #d4af37 100%) !important;
+        border-color: #ffffff !important;
+        box-shadow: 0 8px 24px rgba(245, 158, 11, 0.6) !important;
+        transform: translateY(-2px) !important;
+    }
+
+    /* Glass Table & Expander */
+    div[data-testid="stExpander"] {
+        background: rgba(14, 13, 10, 0.75) !important;
+        backdrop-filter: blur(18px) !important;
+        border: 1px solid rgba(212, 175, 55, 0.25) !important;
+        border-top: 1px solid rgba(255, 235, 160, 0.45) !important;
+        border-radius: 14px !important;
+        box-shadow: inset 0 1px 1px rgba(255, 235, 160, 0.2), 0 12px 30px rgba(0, 0, 0, 0.6) !important;
+    }
+
+    .badge-insert { background-color: rgba(212, 175, 55, 0.25); color: #fef08a; padding: 4px 10px; border-radius: 6px; font-weight: bold; border: 1px solid rgba(212, 175, 55, 0.5); }
+    .badge-update { background-color: rgba(245, 158, 11, 0.25); color: #fbbf24; padding: 4px 10px; border-radius: 6px; font-weight: bold; border: 1px solid rgba(245, 158, 11, 0.5); }
+    .badge-delete { background-color: rgba(239, 68, 68, 0.25); color: #fca5a5; padding: 4px 10px; border-radius: 6px; font-weight: bold; border: 1px solid rgba(239, 68, 68, 0.5); }
 </style>
 """, unsafe_allow_html=True)
 
