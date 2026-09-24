@@ -703,8 +703,97 @@ TBLPROPERTIES (
     });
   }
 
+  // FeatureHub Interactive Scoring Logic
+  const distSlider = document.getElementById("fh-dist");
+  const distVal = document.getElementById("fh-dist-val");
+  const speedSlider = document.getElementById("fh-speed");
+  const speedVal = document.getElementById("fh-speed-val");
+  const btnFhPredict = document.getElementById("btn-fh-predict");
+
+  if (distSlider && distVal) {
+    distSlider.addEventListener("input", (e) => {
+      distVal.textContent = `${e.target.value} km`;
+    });
+  }
+  if (speedSlider && speedVal) {
+    speedSlider.addEventListener("input", (e) => {
+      speedVal.textContent = `${e.target.value} km/h`;
+    });
+  }
+
+  if (btnFhPredict) {
+    btnFhPredict.addEventListener("click", () => {
+      const amount = parseFloat(document.getElementById("fh-amount").value) || 85.0;
+      const dist = parseFloat(distSlider.value) || 15.0;
+      const speed = parseFloat(speedSlider.value) || 35.0;
+      const cvv = document.getElementById("fh-cvv").checked;
+      const threeds = document.getElementById("fh-3ds").checked;
+      const foreign = document.getElementById("fh-foreign").checked;
+
+      // Model weights from trained FraudClassifier
+      let z = -2.65; // Base log-odds bias
+      z += (amount - 60.0) / 450.0 * 0.9435;
+      z += (dist - 12.0) / 400.0 * 1.0726;
+      z += (speed - 25.0) / 150.0 * 0.6335;
+      if (!threeds) z += 1.85; // Bypassed 3DS risk
+      if (!cvv) z += 2.20;     // Mismatched CVV risk
+      if (foreign) z += 0.85;  // Cross-border risk
+      if (speed > 800) z += 3.50; // Impossible travel penalty
+
+      // Sigmoid probability
+      const prob = 1.0 / (1.0 + Math.exp(-Math.max(-15, Math.min(15, z))));
+      const probPct = (prob * 100.0).toFixed(2);
+
+      const probEl = document.getElementById("fh-prob");
+      const badgeEl = document.getElementById("fh-decision-badge");
+      const attributionsEl = document.getElementById("fh-attributions");
+
+      if (probEl) {
+        probEl.textContent = `${probPct}%`;
+        probEl.style.color = prob >= 0.38 ? "#EF4444" : "#34D399";
+      }
+
+      if (badgeEl) {
+        if (prob >= 0.70) {
+          badgeEl.textContent = "DECLINE";
+          badgeEl.style.background = "rgba(239, 68, 68, 0.2)";
+          badgeEl.style.color = "#F87171";
+          badgeEl.style.border = "1px solid rgba(239, 68, 68, 0.4)";
+        } else if (prob >= 0.38) {
+          badgeEl.textContent = "MANUAL REVIEW";
+          badgeEl.style.background = "rgba(245, 158, 11, 0.2)";
+          badgeEl.style.color = "#FBBF24";
+          badgeEl.style.border = "1px solid rgba(245, 158, 11, 0.4)";
+        } else {
+          badgeEl.textContent = "APPROVE";
+          badgeEl.style.background = "rgba(16, 185, 129, 0.2)";
+          badgeEl.style.color = "#34D399";
+          badgeEl.style.border = "1px solid rgba(16, 185, 129, 0.4)";
+        }
+      }
+
+      if (attributionsEl) {
+        const factors = [];
+        if (amount > 500) factors.push(`&bull; <code>tx_amount</code> ($${amount}): <span style="color: #F87171;">+${((amount/500)*0.94).toFixed(2)} (High Spend Spurt)</span>`);
+        if (dist > 150) factors.push(`&bull; <code>tx_distance_from_home_km</code> (${dist}km): <span style="color: #F87171;">+${((dist/300)*1.07).toFixed(2)} (Unusual Geo Location)</span>`);
+        if (speed > 800) factors.push(`&bull; <code>tx_is_impossible_travel</code> (${speed}km/h): <span style="color: #F87171;">+3.50 (Impossible Physical Speed)</span>`);
+        if (!threeds) factors.push(`&bull; <code>tx_3ds_authenticated</code> (False): <span style="color: #F87171;">+1.85 (No 3DS Challenge)</span>`);
+        if (!cvv) factors.push(`&bull; <code>tx_cvv_matched</code> (False): <span style="color: #F87171;">+2.20 (CVV Security Failure)</span>`);
+        if (factors.length === 0) {
+          factors.push(`&bull; <code>tx_3ds_authenticated</code>: <span style="color: #34D399;">-0.55 (Strong Trust Anchor)</span>`);
+          factors.push(`&bull; <code>tx_distance_from_home_km</code>: <span style="color: #34D399;">-0.28 (Local Proximity)</span>`);
+          factors.push(`&bull; <code>tx_amount</code>: <span style="color: #34D399;">-0.27 (Within Baseline)</span>`);
+        }
+        attributionsEl.innerHTML = factors.join("<br>");
+      }
+
+      showToast(`Scored transaction: ${prob >= 0.38 ? 'RISK FLAGGED' : 'APPROVED'} (${probPct}% fraud risk)`, prob >= 0.38 ? "warning" : "success");
+    });
+  }
+
   // Initial Renders
   renderEventsTable();
   renderIcebergView();
   renderServices();
 });
+

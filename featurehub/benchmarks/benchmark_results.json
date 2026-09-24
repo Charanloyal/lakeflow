@@ -1,0 +1,28 @@
+{
+  "benchmark_timestamp": "2026-09-24T18:44:32Z",
+  "sample_size": 10000,
+  "queries_per_second": 5995.65,
+  "online_retrieval": {
+    "p50_ms": 0.1226,
+    "p90_ms": 0.1821,
+    "p95_ms": 0.2056,
+    "p99_ms": 0.3639,
+    "p99_9_ms": 1.055,
+    "mean_ms": 0.1382,
+    "min_ms": 0.0555,
+    "max_ms": 3.668,
+    "std_ms": 0.0777
+  },
+  "end_to_end_prediction": {
+    "sample_size": 2000,
+    "p50_ms": 0.1992,
+    "p95_ms": 0.3588,
+    "p99_ms": 0.6854,
+    "mean_ms": 0.2291
+  },
+  "sla_compliance": {
+    "p99_under_10ms": true,
+    "p95_under_5ms": true,
+    "status": "PASS"
+  }
+}

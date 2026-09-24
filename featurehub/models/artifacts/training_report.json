@@ -1,0 +1,103 @@
+{
+  "model_type": "FraudClassifier_L2_LogisticRegression",
+  "seed": 42,
+  "trained_samples": 1200,
+  "validation_samples": 300,
+  "features_used": [
+    "customer_spend_amount_24h",
+    "customer_spend_amount_7d",
+    "customer_tx_count_24h",
+    "customer_avg_spend_amount_30d",
+    "customer_failed_tx_count_24h",
+    "customer_credit_score",
+    "customer_risk_tier",
+    "merchant_tx_volume_24h",
+    "merchant_fraud_rate_30d",
+    "merchant_chargeback_ratio_30d",
+    "merchant_risk_score",
+    "merchant_category_risk_index",
+    "device_ip_reputation_score",
+    "device_trust_score",
+    "device_distinct_cards_24h",
+    "device_tcp_rtt_ms",
+    "tx_amount",
+    "tx_amount_to_customer_avg_ratio",
+    "tx_distance_from_home_km",
+    "tx_speed_from_last_tx_kmh",
+    "tx_is_night",
+    "tx_is_impossible_travel",
+    "tx_is_foreign_country",
+    "tx_cvv_matched",
+    "tx_3ds_authenticated",
+    "tx_retry_attempt_count"
+  ],
+  "metrics": {
+    "accuracy": 1.0,
+    "roc_auc": 1.0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1_score": 1.0,
+    "threshold": 0.38,
+    "n_features": 26,
+    "n_training_samples": 1200
+  },
+  "top_10_feature_importances": [
+    {
+      "feature": "tx_distance_from_home_km",
+      "importance": 0.1493,
+      "weight": 1.0726
+    },
+    {
+      "feature": "tx_amount",
+      "importance": 0.1314,
+      "weight": 0.9435
+    },
+    {
+      "feature": "tx_retry_attempt_count",
+      "importance": 0.1034,
+      "weight": 0.7429
+    },
+    {
+      "feature": "tx_speed_from_last_tx_kmh",
+      "importance": 0.0882,
+      "weight": 0.6335
+    },
+    {
+      "feature": "tx_3ds_authenticated",
+      "importance": 0.076,
+      "weight": -0.5459
+    },
+    {
+      "feature": "tx_amount_to_customer_avg_ratio",
+      "importance": 0.0674,
+      "weight": 0.4841
+    },
+    {
+      "feature": "tx_is_impossible_travel",
+      "importance": 0.0432,
+      "weight": 0.3104
+    },
+    {
+      "feature": "tx_is_foreign_country",
+      "importance": 0.0364,
+      "weight": 0.2611
+    },
+    {
+      "feature": "tx_is_night",
+      "importance": 0.0346,
+      "weight": 0.2487
+    },
+    {
+      "feature": "tx_cvv_matched",
+      "importance": 0.0336,
+      "weight": -0.2416
+    }
+  ],
+  "loss_history": [
+    0.007267007118736666,
+    0.007132138130003569,
+    0.007084702651493417,
+    0.007061553545865202,
+    0.006977179925585845
+  ]
+}
