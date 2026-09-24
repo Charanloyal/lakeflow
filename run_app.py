@@ -12,7 +12,7 @@ import threading
 import time
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 
-PORT = 8501
+PORT = int(os.environ.get("PORT", 8501))
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 WEB_DIR = os.path.join(BASE_DIR, "apps", "web")
 
@@ -34,11 +34,12 @@ def main():
     print(" ⚡ LAKEFLOW 2.0 | STREAMING CDC LAKEHOUSE PLATFORM")
     print("=" * 80)
     print(f" Serving LakeFlow UI from: {WEB_DIR}")
-    print(f" Local Web Dashboard:     http://localhost:{PORT}")
+    print(f" Web Dashboard Port:       {PORT}")
     print("=" * 80)
 
     url = f"http://localhost:{PORT}"
-    threading.Thread(target=open_browser, args=(url,), daemon=True).start()
+    if "RENDER" not in os.environ and "PORT" not in os.environ:
+        threading.Thread(target=open_browser, args=(url,), daemon=True).start()
 
     server = HTTPServer(("0.0.0.0", PORT), LakeFlowHandler)
     try:

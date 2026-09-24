@@ -1,3 +1,7 @@
+# ==============================================================================
+# Render Blueprint Specification for LakeFlow
+# Connect repository on: https://dashboard.render.com/blueprints/new
+# ==============================================================================
 services:
   - type: web
     name: lakeflow-demo
@@ -5,6 +9,7 @@ services:
     plan: free
     region: oregon
     dockerfilePath: ./Dockerfile
+    healthCheckPath: /
     envVars:
       - key: PORT
-        value: 8501
+        value: 10000

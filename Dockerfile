@@ -11,8 +11,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-EXPOSE 8501
+EXPOSE 8501 8000 10000
 
-HEALTHCHECK CMD curl --fail http://localhost:8501/_stcore/health || exit 1
+HEALTHCHECK --interval=15s --timeout=5s --retries=3 \
+  CMD curl --fail http://localhost:${PORT:-8501}/ || exit 1
 
-ENTRYPOINT ["streamlit", "run", "apps/dashboard/app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+ENTRYPOINT ["python", "run_app.py"]

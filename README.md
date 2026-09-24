@@ -1,6 +1,7 @@
 # LakeFlow | Streaming CDC Lakehouse Platform (`data-platform-lab`)
 
-[![Live Demo](https://img.shields.io/badge/Live%20Demo-Render-00c7b7?style=for-the-badge&logo=render&logoColor=white)](https://lakeflow-demo.onrender.com)
+[![GitHub Pages](https://img.shields.io/badge/Live%20Demo-GitHub%20Pages-10b981?style=for-the-badge&logo=github&logoColor=white)](https://charanloyal.github.io/lakeflow/)
+[![Render Demo](https://img.shields.io/badge/Cloud%20Demo-Render-00c7b7?style=for-the-badge&logo=render&logoColor=white)](https://lakeflow-demo.onrender.com)
 [![Local Dashboard](https://img.shields.io/badge/Local%20Dashboard-8501-f59e0b?style=for-the-badge&logo=streamlit&logoColor=black)](http://localhost:8501)
 [![API Docs](https://img.shields.io/badge/REST%20API-Swagger%20Docs-3b82f6?style=for-the-badge&logo=fastapi&logoColor=white)](http://localhost:8000/docs)
 [![Throughput](https://img.shields.io/badge/Throughput-423%2C062%20evt%2Fs-10b981?style=for-the-badge)](file:///lakeflow/benchmarks/report.md)
@@ -15,16 +16,21 @@ A production-grade, local development and cloud-ready infrastructure monorepo po
 
 ## 🌐 Live Demo & Service Access Directory
 
-| Environment | Service / App | Access Link | Description |
-| :--- | :--- | :--- | :--- |
-| **Cloud Deployment** | **LakeFlow Live Cloud Demo** | **[`https://lakeflow-demo.onrender.com`](https://lakeflow-demo.onrender.com)** | Hosted live deployment on Render (configured via `render.yaml`) |
-| **Local Web App** | **LakeFlow 2.0 Web UI** | **[`http://localhost:8501`](http://localhost:8501)** | Modern Black & Gold Glassmorphic UI with interactive pipeline canvas |
-| **REST API** | **FastAPI Swagger Docs** | **[`http://localhost:8000/docs`](http://localhost:8000/docs)** | OpenAPI interactive testing for CDC mutation & telemetry endpoints |
-| **Compute** | **Spark Master UI** | `http://localhost:8080` | Real-time micro-batch streaming listener and worker status |
-| **SQL Engine** | **Trino Query UI** | `http://localhost:8082` | Distributed execution plans, partition pruning stats, and query analyzer |
-| **Object Store** | **MinIO S3 Console** | `http://localhost:9001` | Parquet files and Iceberg metadata manifests (`admin` / `password123`) |
-| **Feature Store** | **Redis FeatureHub** | `localhost:6379` | Sub-12ms p99 online feature lookup store |
-| **Metrics** | **Grafana Dashboards** | `http://localhost:3000` | Pre-configured cluster telemetry dashboards (`admin` / `admin`) |
+| Environment | Service / App | Access Link | Description | Status |
+| :--- | :--- | :--- | :--- | :--- |
+| **Instant Live Demo** | **GitHub Pages Live App** | **[`https://charanloyal.github.io/lakeflow/`](https://charanloyal.github.io/lakeflow/)** | 24/7 free hosted interactive web UI (zero sleep time) | 🟢 **ACTIVE** |
+| **Cloud Container** | **Render Cloud Service** | **[`https://lakeflow-demo.onrender.com`](https://lakeflow-demo.onrender.com)** | Hosted on Render via `render.yaml` / Dockerfile | 🟡 **Needs 1-click connect** |
+| **Local Web App** | **LakeFlow 2.0 Web UI** | **[`http://localhost:8501`](http://localhost:8501)** | Modern Black & Gold Glassmorphic UI with pipeline canvas | 🟢 **ACTIVE** |
+| **REST API** | **FastAPI Swagger Docs** | **[`http://localhost:8000/docs`](http://localhost:8000/docs)** | OpenAPI interactive testing for CDC mutation endpoints | 🟢 **ACTIVE** |
+| **Compute** | **Spark Master UI** | `http://localhost:8080` | Real-time micro-batch streaming listener status | 🟢 Local |
+| **SQL Engine** | **Trino Query UI** | `http://localhost:8082` | Distributed execution plans and partition pruning stats | 🟢 Local |
+| **Object Store** | **MinIO S3 Console** | `http://localhost:9001` | Parquet files and Iceberg metadata manifests | 🟢 Local |
+
+> 💡 **Why Render says "Not Found":**  
+> Render requires you to connect your repository once in your Render dashboard:
+> 1. Go to **[dashboard.render.com/blueprints/new](https://dashboard.render.com/blueprints/new)** (or **New + ➔ Web Service**)
+> 2. Select `Charanloyal/lakeflow`
+> 3. Click **Apply / Create Web Service** — Render will build `Dockerfile` and publish to `https://lakeflow-demo.onrender.com`!
 
 ---
 
