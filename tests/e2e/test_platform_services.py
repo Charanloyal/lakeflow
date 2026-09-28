@@ -42,8 +42,9 @@ def run_dag(client: httpx.Client, dag_id: str, conf: dict | None = None, timeout
     assert created.status_code == 200, created.text
     run_id = created.json()["dag_run_id"]
     return eventually(
-        lambda: (run := client.get(f"/dags/{dag_id}/dagRuns/{run_id}").json())["state"] in ("success", "failed")
-        and run,
+        lambda: (
+            (run := client.get(f"/dags/{dag_id}/dagRuns/{run_id}").json())["state"] in ("success", "failed") and run
+        ),
         timeout=timeout,
         interval=5,
         what=f"{dag_id} run {run_id}",

@@ -10,13 +10,50 @@ import { useApi } from "@/lib/hooks";
 import type { RecoveryAction, RecoveryList } from "@/lib/types";
 
 const ACTIONS = [
-  { action: "inject_duplicates", title: "Redeliver events", expect: "Real records re-produced byte-for-byte: counted as duplicates, bronze and silver unchanged.", count: true },
-  { action: "inject_malformed", title: "Inject malformed records", expect: "Routed to the DLQ with a reason code; the stream keeps running.", count: true, kind: true },
-  { action: "inject_late", title: "Inject late, out-of-order updates", expect: "Older LSN and 2 h old timestamp: stored as stale + late, silver unchanged.", count: true },
-  { action: "crash_after_commit", title: "Crash Spark after the next Iceberg commit", expect: "Spark exits before the checkpoint commit; the replayed batch must not duplicate rows (attempts = 2).", destructive: true },
-  { action: "crash_now", title: "Kill Spark now", expect: "Hard stop; Docker restarts the job and it resumes from the checkpoint.", destructive: true },
-  { action: "restart_connector", title: "Restart the Debezium connector", expect: "Resumes from the last flushed LSN; any re-emitted events are absorbed as duplicates.", destructive: true },
-  { action: "apply_schema_migration", title: "Apply schema migration (contract v2)", expect: "Adds shop.orders.channel; new events are stamped contract v2.", destructive: true },
+  {
+    action: "inject_duplicates",
+    title: "Redeliver events",
+    expect: "Real records re-produced byte-for-byte: counted as duplicates, bronze and silver unchanged.",
+    count: true,
+  },
+  {
+    action: "inject_malformed",
+    title: "Inject malformed records",
+    expect: "Routed to the DLQ with a reason code; the stream keeps running.",
+    count: true,
+    kind: true,
+  },
+  {
+    action: "inject_late",
+    title: "Inject late, out-of-order updates",
+    expect: "Older LSN and 2 h old timestamp: stored as stale + late, silver unchanged.",
+    count: true,
+  },
+  {
+    action: "crash_after_commit",
+    title: "Crash Spark after the next Iceberg commit",
+    expect:
+      "Spark exits before the checkpoint commit; the replayed batch must not duplicate rows (attempts = 2).",
+    destructive: true,
+  },
+  {
+    action: "crash_now",
+    title: "Kill Spark now",
+    expect: "Hard stop; Docker restarts the job and it resumes from the checkpoint.",
+    destructive: true,
+  },
+  {
+    action: "restart_connector",
+    title: "Restart the Debezium connector",
+    expect: "Resumes from the last flushed LSN; any re-emitted events are absorbed as duplicates.",
+    destructive: true,
+  },
+  {
+    action: "apply_schema_migration",
+    title: "Apply schema migration (contract v2)",
+    expect: "Adds shop.orders.channel; new events are stamped contract v2.",
+    destructive: true,
+  },
 ] as const;
 
 export default function RecoveryPage() {
@@ -47,13 +84,19 @@ export default function RecoveryPage() {
     <>
       <h1>Recovery lab</h1>
       <p className="subtitle">
-        Bounded, audited fault injection (admin only, rate-limited). Injected records carry a <code>lakeflow-injection-id</code>{" "}
-        header and are labelled everywhere they appear.
+        Bounded, audited fault injection (admin only, rate-limited). Injected records carry a{" "}
+        <code>lakeflow-injection-id</code> header and are labelled everywhere they appear.
       </p>
       <div className="panel row">
         <label>
           Count (1–20)
-          <input type="number" min={1} max={20} value={count} onChange={(e) => setCount(Math.max(1, Math.min(20, Number(e.target.value))))} />
+          <input
+            type="number"
+            min={1}
+            max={20}
+            value={count}
+            onChange={(e) => setCount(Math.max(1, Math.min(20, Number(e.target.value))))}
+          />
         </label>
         <label>
           Malformed kind
@@ -65,7 +108,9 @@ export default function RecoveryPage() {
           </select>
         </label>
         {!isAdmin ? <span className="provenance">Read-only: sign in as admin to run actions.</span> : null}
-        {history.data && !history.data.enabled ? <Badge status="down">disabled by LAKEFLOW_RECOVERY_LAB_ENABLED</Badge> : null}
+        {history.data && !history.data.enabled ? (
+          <Badge status="down">disabled by LAKEFLOW_RECOVERY_LAB_ENABLED</Badge>
+        ) : null}
       </div>
       {result ? (
         <div className="callout" role="status" data-testid="recovery-result">
@@ -90,7 +135,11 @@ export default function RecoveryPage() {
       </section>
       <section className="panel" style={{ marginTop: 16 }}>
         <h2>Action log</h2>
-        <StateView {...history} empty={(d) => d.actions.length === 0 && d.acks.length === 0} emptyText="No actions yet.">
+        <StateView
+          {...history}
+          empty={(d) => d.actions.length === 0 && d.acks.length === 0}
+          emptyText="No actions yet."
+        >
           {(data) => (
             <div className="grid two">
               <div className="table-wrap">

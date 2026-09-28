@@ -38,7 +38,14 @@ export function LineChart({
         </text>
         {threshold ? (
           <g>
-            <line x1={pad} x2={width - pad} y1={sy(threshold.value)} y2={sy(threshold.value)} stroke="#f85149" strokeDasharray="4 4" />
+            <line
+              x1={pad}
+              x2={width - pad}
+              y1={sy(threshold.value)}
+              y2={sy(threshold.value)}
+              stroke="#f85149"
+              strokeDasharray="4 4"
+            />
             <text x={width - pad} y={sy(threshold.value) - 4} fill="#f85149" fontSize="10" textAnchor="end">
               {threshold.label}
             </text>

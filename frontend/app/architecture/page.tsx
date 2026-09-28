@@ -19,7 +19,9 @@ export default function ArchitecturePage() {
   return (
     <>
       <h1>Architecture and decisions</h1>
-      <p className="subtitle">The primary path, then the design records that explain each trade-off (served from docs/adr).</p>
+      <p className="subtitle">
+        The primary path, then the design records that explain each trade-off (served from docs/adr).
+      </p>
       <section className="panel" aria-label="Primary path">
         <div className="pipeline">
           {LAYERS.map(([title, detail], index) => (
@@ -37,8 +39,8 @@ export default function ArchitecturePage() {
           ))}
         </div>
         <p className="provenance">
-          Control plane: FastAPI (typed endpoints, session auth, SSE) + this Next.js UI behind nginx. Operations: Airflow
-          (compaction, snapshot expiry, validation, backfill), Prometheus + Grafana.
+          Control plane: FastAPI (typed endpoints, session auth, SSE) + this Next.js UI behind nginx.
+          Operations: Airflow (compaction, snapshot expiry, validation, backfill), Prometheus + Grafana.
         </p>
       </section>
       <StateView {...adrs}>

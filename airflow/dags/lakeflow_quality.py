@@ -53,10 +53,18 @@ def lakeflow_quality_checks():
             conn.close()
         for result in results:
             print(json.dumps(result, default=str))
-        broken = [r["check_id"] for r in results if r["status"] == "error" or (r["severity"] == "critical" and r["status"] == "fail")]
+        broken = [
+            r["check_id"]
+            for r in results
+            if r["status"] == "error" or (r["severity"] == "critical" and r["status"] == "fail")
+        ]
         if broken:
             raise AirflowException(f"quality run {run_id}: critical checks failed or errored: {broken}")
-        return {"run_id": run_id, "checks": len(results), "warnings": [r["check_id"] for r in results if r["status"] == "fail"]}
+        return {
+            "run_id": run_id,
+            "checks": len(results),
+            "warnings": [r["check_id"] for r in results if r["status"] == "fail"],
+        }
 
     validate()
 

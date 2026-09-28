@@ -36,10 +36,14 @@ def test_insert_update_delete_trace_with_real_identifiers():
         created = client.post("/api/demo/orders", json={"amount": "42.00", "currency": "EUR", "status": "PENDING"})
         assert created.status_code == 201, created.text
         order_id = created.json()["order_id"]
-        body = eventually(lambda: (t := trace(client, order_id)) and stages(t)["trino"]["status"] == "done" and t,
-                          what="insert traced to Trino")
+        body = eventually(
+            lambda: (t := trace(client, order_id)) and stages(t)["trino"]["status"] == "done" and t,
+            what="insert traced to Trino",
+        )
         s = stages(body)
-        assert all(s[name]["status"] == "done" for name in ("postgres", "debezium", "kafka", "spark", "iceberg", "trino"))
+        assert all(
+            s[name]["status"] == "done" for name in ("postgres", "debezium", "kafka", "spark", "iceberg", "trino")
+        )
         assert s["kafka"]["details"]["topic"] == "lakeflow.shop.orders"
         assert isinstance(s["kafka"]["details"]["offset"], int)
         assert isinstance(s["iceberg"]["details"]["snapshot_id"], int)
@@ -50,7 +54,9 @@ def test_insert_update_delete_trace_with_real_identifiers():
         assert client.patch(f"/api/demo/orders/{order_id}", json={"status": "PAID"}).status_code == 200
         eventually(lambda: trace(client, order_id)["final_state"]["_source_lsn"] > lsn, what="update visible")
         assert client.delete(f"/api/demo/orders/{order_id}").status_code == 200
-        final = eventually(lambda: (t := trace(client, order_id))["final_state"]["is_deleted"] and t, what="delete visible")
+        final = eventually(
+            lambda: (t := trace(client, order_id))["final_state"]["is_deleted"] and t, what="delete visible"
+        )
         assert [e["op"] for e in final["events"]] == ["c", "u", "d"]
         eventually(lambda: stages(trace(client, order_id))["checkpoint"]["status"] == "done", what="checkpoint commit")
 
@@ -59,9 +65,11 @@ def test_recovery_lab_duplicates_malformed_and_late():
     with api(ADMIN) as client:
         seed = client.post("/api/demo/orders", json={"amount": "7.00"}).json()["order_id"]
         eventually(lambda: stages(trace(client, seed))["trino"]["status"] == "done", what="seed order visible")
-        for action in ({"action": "inject_duplicates", "count": 2},
-                       {"action": "inject_malformed", "count": 2, "kind": "contract_violation"},
-                       {"action": "inject_late", "count": 1}):
+        for action in (
+            {"action": "inject_duplicates", "count": 2},
+            {"action": "inject_malformed", "count": 2, "kind": "contract_violation"},
+            {"action": "inject_late", "count": 1},
+        ):
             response = client.post("/api/recovery/actions", json=action)
             assert response.status_code == 202, response.text
         marker = client.post("/api/demo/orders", json={"amount": "8.00"}).json()["order_id"]
@@ -70,7 +78,9 @@ def test_recovery_lab_duplicates_malformed_and_late():
         assert any(r["injection_id"] and r["error_code"] == "CONTRACT_VIOLATION" for r in rejected)
         late = client.get("/api/events?outcome=stale&minutes=30").json()["events"]
         assert any(e["injection_id"] and e["is_late"] for e in late)
-        results = client.post("/api/quality/run", json={"checks": ["bronze.event_id_unique", "orders.primary_key_unique"]})
+        results = client.post(
+            "/api/quality/run", json={"checks": ["bronze.event_id_unique", "orders.primary_key_unique"]}
+        )
         assert all(r["status"] == "pass" for r in results.json()["results"]), results.text
 
 
@@ -81,15 +91,18 @@ def test_crash_after_commit_is_recovered_without_duplicates():
         order_id = client.post("/api/demo/orders", json={"amount": "13.00"}).json()["order_id"]
         body = eventually(
             lambda: (t := trace(client, order_id)) and stages(t)["checkpoint"]["status"] == "done" and t,
-            timeout=420, what="order committed after Spark restart",
+            timeout=420,
+            what="order committed after Spark restart",
         )
         spark = stages(body)["spark"]["details"]
         assert spark["attempts"] >= 2, "the batch that crashed after its Iceberg commit must have been replayed"
         assert len([e for e in body["events"] if e["op"] == "c"]) == 1
         acks = client.get("/api/recovery/actions").json()["acks"]
         assert any(a.get("action") == "crash_after_commit" and a.get("batch_id") is not None for a in acks)
-        results = client.post("/api/quality/run", json={"checks": ["bronze.event_id_unique", "orders.primary_key_unique",
-                                                                  "orders.source_reconciliation"]})
+        results = client.post(
+            "/api/quality/run",
+            json={"checks": ["bronze.event_id_unique", "orders.primary_key_unique", "orders.source_reconciliation"]},
+        )
         assert all(r["status"] == "pass" for r in results.json()["results"]), results.text
 
 

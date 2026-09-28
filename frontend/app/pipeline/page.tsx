@@ -34,10 +34,15 @@ export default function PipelinePage() {
     <>
       <h1>Live pipeline</h1>
       <p className="subtitle">
-        PostgreSQL WAL → Debezium → Kafka → Spark → Iceberg → Trino. Status comes from the API health monitor (10 s); the
-        highlight follows live events from the stream.
+        PostgreSQL WAL → Debezium → Kafka → Spark → Iceberg → Trino. Status comes from the API health monitor
+        (10 s); the highlight follows live events from the stream.
       </p>
-      <StateView loading={polled.loading && !topology} error={polled.error} data={topology ?? undefined} stale={polled.stale}>
+      <StateView
+        loading={polled.loading && !topology}
+        error={polled.error}
+        data={topology ?? undefined}
+        stale={polled.stale}
+      >
         {(data) => (
           <section className="panel" aria-label="Topology">
             <div className="pipeline">
@@ -45,7 +50,10 @@ export default function PipelinePage() {
                 const edge = data.edges[index];
                 return (
                   <Fragment key={node.id}>
-                    <div className={`stage-node${pulse === node.id ? " active" : ""}`} data-testid={`node-${node.id}`}>
+                    <div
+                      className={`stage-node${pulse === node.id ? " active" : ""}`}
+                      data-testid={`node-${node.id}`}
+                    >
                       <h3>{node.label}</h3>
                       <Badge status={node.status} />
                       <p className="provenance">{node.detail}</p>
@@ -74,7 +82,10 @@ export default function PipelinePage() {
                 );
               })}
             </div>
-            <Provenance asOf={data.as_of} source={shell.topology ? "SSE /api/stream/live" : "GET /api/topology"} />
+            <Provenance
+              asOf={data.as_of}
+              source={shell.topology ? "SSE /api/stream/live" : "GET /api/topology"}
+            />
           </section>
         )}
       </StateView>
@@ -117,7 +128,11 @@ export default function PipelinePage() {
         </div>
         <div className="panel">
           <h2>Micro-batches</h2>
-          <StateView {...batches} empty={(d) => d.batches.length === 0} emptyText="No micro-batches committed yet.">
+          <StateView
+            {...batches}
+            empty={(d) => d.batches.length === 0}
+            emptyText="No micro-batches committed yet."
+          >
             {(data) => (
               <div className="table-wrap">
                 <table>
@@ -143,11 +158,19 @@ export default function PipelinePage() {
                         <td>{b.applied}</td>
                         <td>{b.duplicates}</td>
                         <td>{b.dlq_rows}</td>
-                        <td>{b.freshness_p95_ms === null ? "—" : `${(b.freshness_p95_ms / 1000).toFixed(1)}s`}</td>
+                        <td>
+                          {b.freshness_p95_ms === null ? "—" : `${(b.freshness_p95_ms / 1000).toFixed(1)}s`}
+                        </td>
                         <td>
                           {b.added_data_files} ({formatBytes(b.added_files_bytes)})
                         </td>
-                        <td>{b.attempts > 1 ? <Badge status="warning">{`${b.attempts} (replayed)`}</Badge> : b.attempts}</td>
+                        <td>
+                          {b.attempts > 1 ? (
+                            <Badge status="warning">{`${b.attempts} (replayed)`}</Badge>
+                          ) : (
+                            b.attempts
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>

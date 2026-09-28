@@ -1,7 +1,13 @@
 import { expect, test, type Page } from "@playwright/test";
 
-const ADMIN = { user: process.env.LAKEFLOW_ADMIN_USER ?? "admin", password: process.env.LAKEFLOW_ADMIN_PASSWORD ?? "" };
-const VIEWER = { user: process.env.LAKEFLOW_VIEWER_USER ?? "viewer", password: process.env.LAKEFLOW_VIEWER_PASSWORD ?? "" };
+const ADMIN = {
+  user: process.env.LAKEFLOW_ADMIN_USER ?? "admin",
+  password: process.env.LAKEFLOW_ADMIN_PASSWORD ?? "",
+};
+const VIEWER = {
+  user: process.env.LAKEFLOW_VIEWER_USER ?? "viewer",
+  password: process.env.LAKEFLOW_VIEWER_PASSWORD ?? "",
+};
 const SHOTS = process.env.LAKEFLOW_SCREENSHOT_DIR ?? "test-results/screenshots";
 
 async function login(page: Page, who = ADMIN) {
@@ -87,7 +93,11 @@ test("screenshots of the remaining pages", async ({ page }) => {
 test("dependency outage renders an explicit error state", async ({ page }) => {
   await login(page);
   await page.route("**/api/metrics/overview", (route) =>
-    route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ detail: "Trino unavailable: test" }) }),
+    route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      body: JSON.stringify({ detail: "Trino unavailable: test" }),
+    }),
   );
   await page.reload();
   await expect(page.getByText("Dependency unavailable: Trino unavailable: test")).toBeVisible();

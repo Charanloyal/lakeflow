@@ -11,20 +11,37 @@ import { Badge } from "./ui";
 
 type StepState = "idle" | "running" | "done" | "error";
 const STEPS = [
-  { id: "create", title: "Insert an order in PostgreSQL", detail: "INSERT INTO shop.orders — follow it to Trino." },
+  {
+    id: "create",
+    title: "Insert an order in PostgreSQL",
+    detail: "INSERT INTO shop.orders — follow it to Trino.",
+  },
   { id: "update", title: "Update it (PENDING → PAID)", detail: "A second change event with a higher LSN." },
   {
     id: "crash",
     title: "Crash Spark after the Iceberg commit",
-    detail: "Arms crash_after_commit, then updates to SHIPPED. Spark dies before writing commits/N and replays the batch.",
+    detail:
+      "Arms crash_after_commit, then updates to SHIPPED. Spark dies before writing commits/N and replays the batch.",
   },
-  { id: "delete", title: "Delete it", detail: "Soft-delete tombstone keeps the LSN so older events can never resurrect it." },
-  { id: "verify", title: "Verify uniqueness and reconciliation", detail: "Runs contract checks live through Trino." },
+  {
+    id: "delete",
+    title: "Delete it",
+    detail: "Soft-delete tombstone keeps the LSN so older events can never resurrect it.",
+  },
+  {
+    id: "verify",
+    title: "Verify uniqueness and reconciliation",
+    detail: "Runs contract checks live through Trino.",
+  },
 ] as const;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function waitForTrace(orderId: string, predicate: (trace: Trace) => boolean, timeoutMs: number): Promise<Trace> {
+async function waitForTrace(
+  orderId: string,
+  predicate: (trace: Trace) => boolean,
+  timeoutMs: number,
+): Promise<Trace> {
   const deadline = Date.now() + timeoutMs;
   let last: Trace | null = null;
   while (Date.now() < deadline) {
@@ -71,7 +88,8 @@ export function GuidedDemo() {
     };
   }, [orderId]);
 
-  const note = (line: string) => setLog((previous) => [`${new Date().toLocaleTimeString()}  ${line}`, ...previous]);
+  const note = (line: string) =>
+    setLog((previous) => [`${new Date().toLocaleTimeString()}  ${line}`, ...previous]);
   const mark = (index: number, state: StepState) =>
     setStates((previous) => previous.map((value, i) => (i === index ? state : value)));
 
@@ -83,7 +101,11 @@ export function GuidedDemo() {
     let current = 0;
     try {
       mark(0, "running");
-      const created = await api.post<MutationResult>("/api/demo/orders", { amount: "42.00", currency: "USD", status: "PENDING" });
+      const created = await api.post<MutationResult>("/api/demo/orders", {
+        amount: "42.00",
+        currency: "USD",
+        status: "PENDING",
+      });
       id = created.order_id;
       setOrderId(id);
       note(`inserted order ${id} (txid ${created.txid}, WAL ${created.commit_lsn})`);
@@ -108,7 +130,9 @@ export function GuidedDemo() {
         await api.patch<MutationResult>(`/api/demo/orders/${id}`, { status: "SHIPPED" });
         latest = await waitForTrace(id, (t) => lsnOf(t) > lsn && trinoDone(t), 300_000);
         const spark = latest.stages.find((s) => s.stage === "spark");
-        note(`recovered: batch ${String(spark?.details.batch_id)} ran ${String(spark?.details.attempts ?? "?")} times, one silver row`);
+        note(
+          `recovered: batch ${String(spark?.details.batch_id)} ran ${String(spark?.details.attempts ?? "?")} times, one silver row`,
+        );
         mark(2, "done");
       }
 
@@ -142,23 +166,49 @@ export function GuidedDemo() {
         <h2 id="guided-demo">Guided demo</h2>
         <div className="row">
           <label className="row" style={{ display: "flex" }}>
-            <input type="checkbox" checked={withCrash} onChange={(e) => setWithCrash(e.target.checked)} disabled={busy} />
+            <input
+              type="checkbox"
+              checked={withCrash}
+              onChange={(e) => setWithCrash(e.target.checked)}
+              disabled={busy}
+            />
             include Spark crash/recovery
           </label>
-          <button className="primary" onClick={runAll} disabled={busy || !isAdmin} data-testid="guided-demo-start">
+          <button
+            className="primary"
+            onClick={runAll}
+            disabled={busy || !isAdmin}
+            data-testid="guided-demo-start"
+          >
             {busy ? "Running…" : "Start guided demo"}
           </button>
         </div>
       </div>
       {!isAdmin ? <p className="provenance">Sign in as the admin user to run mutations.</p> : null}
-      <ol className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", padding: 0 }}>
+      <ol
+        className="grid"
+        style={{ gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", padding: 0 }}
+      >
         {STEPS.map((step, index) => (
-          <li key={step.id} className="metric" style={{ listStyle: "none" }} data-testid={`demo-step-${step.id}`}>
+          <li
+            key={step.id}
+            className="metric"
+            style={{ listStyle: "none" }}
+            data-testid={`demo-step-${step.id}`}
+          >
             <div className="row" style={{ justifyContent: "space-between" }}>
               <strong>
                 {index + 1}. {step.title}
               </strong>
-              <Badge status={states[index] === "running" ? "pending" : states[index] === "idle" ? "unknown" : states[index]}>
+              <Badge
+                status={
+                  states[index] === "running"
+                    ? "pending"
+                    : states[index] === "idle"
+                      ? "unknown"
+                      : states[index]
+                }
+              >
                 {step.id === "crash" && !withCrash ? "skipped" : states[index]}
               </Badge>
             </div>
@@ -176,7 +226,11 @@ export function GuidedDemo() {
           ))}
         </ul>
       ) : null}
-      {log.length ? <pre aria-live="polite" data-testid="demo-log">{log.join("\n")}</pre> : null}
+      {log.length ? (
+        <pre aria-live="polite" data-testid="demo-log">
+          {log.join("\n")}
+        </pre>
+      ) : null}
     </section>
   );
 }

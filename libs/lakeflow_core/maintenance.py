@@ -255,7 +255,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     registry = load_registry(args.contracts)
     tables = args.tables or default_tables([registry.current(n).target_table for n in registry.names])
-    query = trino_query(os.environ.get("LAKEFLOW_TRINO_HOST", "trino"), int(os.environ.get("LAKEFLOW_TRINO_PORT", "8080")))
+    query = trino_query(
+        os.environ.get("LAKEFLOW_TRINO_HOST", "trino"), int(os.environ.get("LAKEFLOW_TRINO_PORT", "8080"))
+    )
     run_id, failed = uuid.uuid4().hex[:12], 0
     for table in tables:
         record = maintain_table(query, table, tasks=args.tasks, runner=args.runner, run_id=run_id)

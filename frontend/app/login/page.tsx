@@ -36,7 +36,13 @@ export default function LoginPage() {
         <div className="grid">
           <label>
             Username
-            <input name="username" autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} required />
+            <input
+              name="username"
+              autoComplete="username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              required
+            />
           </label>
           <label>
             Password

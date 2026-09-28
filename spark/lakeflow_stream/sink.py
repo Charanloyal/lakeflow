@@ -348,7 +348,9 @@ def _bronze_rows(ctx: SinkContext, planned: DataFrame, batch_id: int, committed_
 def _dlq_rows(ctx: SinkContext, decoded: DataFrame, batch_id: int, seen_at: datetime) -> DataFrame:
     position = F.format_string("%05d:%020d", F.col("kafka_partition"), F.col("kafka_offset"))
     coordinates_id = F.sha2(
-        F.concat_ws("|", F.col("kafka_topic"), F.col("kafka_partition").cast("string"), F.col("kafka_offset").cast("string")),
+        F.concat_ws(
+            "|", F.col("kafka_topic"), F.col("kafka_partition").cast("string"), F.col("kafka_offset").cast("string")
+        ),
         256,
     )
     common = [

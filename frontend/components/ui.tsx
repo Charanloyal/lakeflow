@@ -28,7 +28,12 @@ export function Provenance({
 }
 
 export function MetricCard({ metric }: { metric: Metric }) {
-  const value = metric.value === null ? "—" : typeof metric.value === "number" ? formatNumber(metric.value) : metric.value;
+  const value =
+    metric.value === null
+      ? "—"
+      : typeof metric.value === "number"
+        ? formatNumber(metric.value)
+        : metric.value;
   return (
     <div className="metric" data-testid={`metric-${metric.name}`}>
       <div className="row" style={{ justifyContent: "space-between" }}>
@@ -58,11 +63,20 @@ interface StateProps<T> {
 /** Renders loading, error, empty and stale states consistently around any API-backed view. */
 export function StateView<T>({ loading, error, data, stale, empty, emptyText, children }: StateProps<T>) {
   if (data === undefined) {
-    if (loading) return <div className="state" role="status">Loading…</div>;
+    if (loading)
+      return (
+        <div className="state" role="status">
+          Loading…
+        </div>
+      );
     if (error)
       return (
         <div className="state error" role="alert">
-          {error.status === 503 ? "Dependency unavailable: " : error.status === 0 ? "" : `Error ${error.status}: `}
+          {error.status === 503
+            ? "Dependency unavailable: "
+            : error.status === 0
+              ? ""
+              : `Error ${error.status}: `}
           {error.message}
         </div>
       );
@@ -79,7 +93,11 @@ export function StateView<T>({ loading, error, data, stale, empty, emptyText, ch
           Data is stale: no successful refresh for a while.
         </div>
       ) : null}
-      {empty && empty(data) ? <div className="state">{emptyText ?? "Nothing here yet."}</div> : children(data)}
+      {empty && empty(data) ? (
+        <div className="state">{emptyText ?? "Nothing here yet."}</div>
+      ) : (
+        children(data)
+      )}
     </>
   );
 }

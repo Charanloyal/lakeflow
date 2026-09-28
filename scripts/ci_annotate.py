@@ -24,7 +24,7 @@ def escape(text: str) -> str:
 
 def emit(level: str, title: str, message: str) -> None:
     if len(message) > MAX_LEN:
-        message = message[:1800] + "\n[...]\n" + message[-(MAX_LEN - 1800):]
+        message = message[:1800] + "\n[...]\n" + message[-(MAX_LEN - 1800) :]
     print(f"::{level} title={escape(title)[:120]}::{escape(message)}")
 
 
@@ -41,8 +41,13 @@ def junit(path: str, prefix: str = "test") -> None:
                 name = f"{case.get('classname', '')}.{case.get('name', '')}"
                 text = node.text or ""
                 errors = [line for line in text.splitlines() if line.startswith("E ")][:25]
-                emit("error", f"{prefix} {tag}: {name}",
-                     f"{node.get('message', '')[:1200]}\n--- E lines ---\n" + "\n".join(errors) + f"\n--- tail ---\n{text[-1200:]}")
+                emit(
+                    "error",
+                    f"{prefix} {tag}: {name}",
+                    f"{node.get('message', '')[:1200]}\n--- E lines ---\n"
+                    + "\n".join(errors)
+                    + f"\n--- tail ---\n{text[-1200:]}",
+                )
                 count += 1
     suites = list(root.iter("testsuite")) or [root]
     total = sum(int(s.get("tests", 0)) for s in suites)

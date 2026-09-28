@@ -26,7 +26,9 @@ export default function QualityPage() {
     try {
       const run = await api.post<QualityRun>("/api/quality/run", {});
       const failed = run.results.filter((r) => r.status !== "pass");
-      setMessage(`${run.results.length} checks ran; ${failed.length} not passing${run.persisted ? "" : " (results not persisted)"}.`);
+      setMessage(
+        `${run.results.length} checks ran; ${failed.length} not passing${run.persisted ? "" : " (results not persisted)"}.`,
+      );
       summary.reload();
     } catch (error) {
       setMessage(error instanceof ApiError ? error.message : String(error));
@@ -37,8 +39,12 @@ export default function QualityPage() {
 
   async function replay(ids: string[]) {
     try {
-      const result = await api.post<{ replayed: string[]; missing: string[] }>("/api/quality/dlq/replay", { dlq_ids: ids });
-      setMessage(`replayed ${result.replayed.length} record(s) to lakeflow.replay.cdc; missing ${result.missing.length}.`);
+      const result = await api.post<{ replayed: string[]; missing: string[] }>("/api/quality/dlq/replay", {
+        dlq_ids: ids,
+      });
+      setMessage(
+        `replayed ${result.replayed.length} record(s) to lakeflow.replay.cdc; missing ${result.missing.length}.`,
+      );
       dlq.reload();
     } catch (error) {
       setMessage(error instanceof ApiError ? error.message : String(error));
@@ -48,7 +54,9 @@ export default function QualityPage() {
   return (
     <>
       <h1>Data quality</h1>
-      <p className="subtitle">Checks are generated from the versioned contracts and run through Trino (also scheduled by Airflow).</p>
+      <p className="subtitle">
+        Checks are generated from the versioned contracts and run through Trino (also scheduled by Airflow).
+      </p>
       {message ? (
         <div className="callout" role="status">
           {message}
@@ -62,7 +70,11 @@ export default function QualityPage() {
             {running ? "Running…" : "Run checks now"}
           </button>
         </div>
-        <StateView {...summary} empty={(d) => d.results.length === 0} emptyText="No check results yet. Run the checks (admin) or wait for the Airflow validation DAG.">
+        <StateView
+          {...summary}
+          empty={(d) => d.results.length === 0}
+          emptyText="No check results yet. Run the checks (admin) or wait for the Airflow validation DAG."
+        >
           {(data) => (
             <div className="table-wrap">
               <table>
@@ -116,12 +128,18 @@ export default function QualityPage() {
                   {
                     label: "p95",
                     color: "#58a6ff",
-                    points: data.points.map((p) => ({ x: new Date(p.committed_at).getTime(), y: p.freshness_p95_ms === null ? null : p.freshness_p95_ms / 1000 })),
+                    points: data.points.map((p) => ({
+                      x: new Date(p.committed_at).getTime(),
+                      y: p.freshness_p95_ms === null ? null : p.freshness_p95_ms / 1000,
+                    })),
                   },
                   {
                     label: "p50",
                     color: "#3fb950",
-                    points: data.points.map((p) => ({ x: new Date(p.committed_at).getTime(), y: p.freshness_p50_ms === null ? null : p.freshness_p50_ms / 1000 })),
+                    points: data.points.map((p) => ({
+                      x: new Date(p.committed_at).getTime(),
+                      y: p.freshness_p50_ms === null ? null : p.freshness_p50_ms / 1000,
+                    })),
                   },
                 ]}
               />
@@ -133,7 +151,11 @@ export default function QualityPage() {
 
       <section className="panel" aria-labelledby="dlq-title">
         <h2 id="dlq-title">Rejected records (DLQ)</h2>
-        <StateView {...dlq} empty={(d) => d.records.length === 0} emptyText="The DLQ is empty. Use the Recovery Lab to inject malformed records.">
+        <StateView
+          {...dlq}
+          empty={(d) => d.records.length === 0}
+          emptyText="The DLQ is empty. Use the Recovery Lab to inject malformed records."
+        >
           {(data) => (
             <div className="table-wrap">
               <table>
@@ -155,7 +177,9 @@ export default function QualityPage() {
                       <td>
                         <Badge status="error">{r.error_code}</Badge>
                         <div className="provenance">{r.error_detail}</div>
-                        {r.injection_id ? <Badge status="demo">{`injected ${shortId(r.injection_id, 18)}`}</Badge> : null}
+                        {r.injection_id ? (
+                          <Badge status="demo">{`injected ${shortId(r.injection_id, 18)}`}</Badge>
+                        ) : null}
                       </td>
                       <td className="mono">{(r.violations ?? []).join(", ") || "—"}</td>
                       <td className="mono">
@@ -163,7 +187,9 @@ export default function QualityPage() {
                       </td>
                       <td>
                         <Badge status={r.status === "open" ? "warning" : "done"}>{r.status}</Badge>
-                        {r.replay_attempts ? <div className="provenance">{r.replay_attempts} replay(s)</div> : null}
+                        {r.replay_attempts ? (
+                          <div className="provenance">{r.replay_attempts} replay(s)</div>
+                        ) : null}
                       </td>
                       <td>
                         <details>
@@ -209,7 +235,13 @@ export default function QualityPage() {
                         <td>{c.contract}</td>
                         <td>v{c.version}</td>
                         <td>
-                          <Badge status={c.status === "current" ? "done" : c.status === "proposed" ? "pending" : "info"}>{c.status}</Badge>
+                          <Badge
+                            status={
+                              c.status === "current" ? "done" : c.status === "proposed" ? "pending" : "info"
+                            }
+                          >
+                            {c.status}
+                          </Badge>
                         </td>
                         <td className="provenance">{c.owner.team}</td>
                         <td className="mono">
@@ -236,7 +268,8 @@ export default function QualityPage() {
                   <ul>
                     {data.observed_versions.map((v) => (
                       <li key={`${v.contract_name}-${v.contract_version}`}>
-                        {v.contract_name} v{v.contract_version}: {formatNumber(v.events)} events (last {formatDateTime(v.last_seen)})
+                        {v.contract_name} v{v.contract_version}: {formatNumber(v.events)} events (last{" "}
+                        {formatDateTime(v.last_seen)})
                       </li>
                     ))}
                   </ul>

@@ -18,7 +18,10 @@ export default function LineagePage() {
   return (
     <>
       <h1>Lineage</h1>
-      <p className="subtitle">Declared in contracts/lineage.json and enriched with live Iceberg snapshot and Kafka offset stats. Select a dataset for impact analysis.</p>
+      <p className="subtitle">
+        Declared in contracts/lineage.json and enriched with live Iceberg snapshot and Kafka offset stats.
+        Select a dataset for impact analysis.
+      </p>
       <StateView {...lineage}>
         {(data) => (
           <>
@@ -40,7 +43,8 @@ export default function LineagePage() {
                         {d.live ? (
                           <div className="provenance">
                             {formatNumber(d.live.records as number)} records
-                            {d.live.last_commit ? ` · ${formatDateTime(d.live.last_commit)}` : ""} · {d.live.source}
+                            {d.live.last_commit ? ` · ${formatDateTime(d.live.last_commit)}` : ""} ·{" "}
+                            {d.live.source}
                           </div>
                         ) : null}
                       </button>
@@ -65,7 +69,10 @@ export default function LineagePage() {
                       <ul>
                         {result.affected.map((node) => (
                           <li key={node.id}>
-                            <span className="mono">{node.id}</span> <span className="provenance">({node.type}, depth {node.depth})</span>
+                            <span className="mono">{node.id}</span>{" "}
+                            <span className="provenance">
+                              ({node.type}, depth {node.depth})
+                            </span>
                           </li>
                         ))}
                       </ul>

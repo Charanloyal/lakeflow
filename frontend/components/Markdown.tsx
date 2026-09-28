@@ -16,7 +16,11 @@ export function Markdown({ text }: { text: string }) {
     if (line.trim().startsWith("|")) {
       const rows: string[][] = [];
       while (index < lines.length && lines[index].trim().startsWith("|")) {
-        const cells = lines[index].trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+        const cells = lines[index]
+          .trim()
+          .replace(/^\||\|$/g, "")
+          .split("|")
+          .map((c) => c.trim());
         if (!cells.every((c) => /^:?-{2,}:?$/.test(c))) rows.push(cells);
         index += 1;
       }
@@ -26,11 +30,19 @@ export function Markdown({ text }: { text: string }) {
         <div className="table-wrap" key={blocks.length}>
           <table>
             <thead>
-              <tr>{head.map((cell, i) => <th key={i}>{inline(cell)}</th>)}</tr>
+              <tr>
+                {head.map((cell, i) => (
+                  <th key={i}>{inline(cell)}</th>
+                ))}
+              </tr>
             </thead>
             <tbody>
               {body.map((row, r) => (
-                <tr key={r}>{row.map((cell, i) => <td key={i}>{inline(cell)}</td>)}</tr>
+                <tr key={r}>
+                  {row.map((cell, i) => (
+                    <td key={i}>{inline(cell)}</td>
+                  ))}
+                </tr>
               ))}
             </tbody>
           </table>
@@ -42,7 +54,8 @@ export function Markdown({ text }: { text: string }) {
       const ordered = /^\s*\d+\./.test(line);
       const items: string[] = [];
       while (index < lines.length && /^\s*([-*]|\d+\.)\s|^\s{2,}\S/.test(lines[index])) {
-        if (/^\s*([-*]|\d+\.)\s/.test(lines[index])) items.push(lines[index].replace(/^\s*([-*]|\d+\.)\s/, ""));
+        if (/^\s*([-*]|\d+\.)\s/.test(lines[index]))
+          items.push(lines[index].replace(/^\s*([-*]|\d+\.)\s/, ""));
         else items[items.length - 1] += " " + lines[index].trim();
         index += 1;
       }

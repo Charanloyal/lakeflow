@@ -9,8 +9,8 @@ import type { BenchmarkList, Summary } from "@/lib/types";
 function Latency({ summary }: { summary: Summary }) {
   return (
     <span className="mono">
-      p50 {formatNumber(summary.p50, 0)} · p95 {formatNumber(summary.p95, 0)} · p99 {formatNumber(summary.p99, 0)} · σ{" "}
-      {formatNumber(summary.stddev, 0)} ms
+      p50 {formatNumber(summary.p50, 0)} · p95 {formatNumber(summary.p95, 0)} · p99{" "}
+      {formatNumber(summary.p99, 0)} · σ {formatNumber(summary.stddev, 0)} ms
     </span>
   );
 }
@@ -21,16 +21,16 @@ export default function BenchmarksPage() {
     <>
       <h1>Benchmarks</h1>
       <p className="subtitle">
-        Every summary is recomputed from the raw per-event samples in benchmarks/results/*.json (ADR-0005). Nothing here is
-        typed in by hand.
+        Every summary is recomputed from the raw per-event samples in benchmarks/results/*.json (ADR-0005).
+        Nothing here is typed in by hand.
       </p>
       <StateView
         {...runs}
         empty={(d) => d.runs.length === 0}
         emptyText={
           <>
-            No benchmark results yet. Run <code>make benchmark</code> (writes raw JSON to benchmarks/results/) or trigger the CI
-            evidence workflow.
+            No benchmark results yet. Run <code>make benchmark</code> (writes raw JSON to benchmarks/results/)
+            or trigger the CI evidence workflow.
           </>
         }
       >
@@ -40,7 +40,10 @@ export default function BenchmarksPage() {
               <section className="panel" key={run.run_id} aria-label={`Benchmark ${run.run_id}`}>
                 <div className="row" style={{ justifyContent: "space-between" }}>
                   <h2>
-                    {run.run_id} <span className="provenance">· {formatDateTime(run.created_at)} · commit {run.git_sha.slice(0, 8)}</span>
+                    {run.run_id}{" "}
+                    <span className="provenance">
+                      · {formatDateTime(run.created_at)} · commit {run.git_sha.slice(0, 8)}
+                    </span>
                   </h2>
                   <a className="button" href={`${API_BASE}/api/benchmarks/runs/${run.run_id}/raw`} download>
                     Download raw JSON
@@ -55,7 +58,9 @@ export default function BenchmarksPage() {
                     <div className="label">Throughput (mean of iterations)</div>
                     <div className="value">
                       {formatNumber(run.summary.throughput_eps.mean, 1)}
-                      <span className="unit">events/s ± {formatNumber(run.summary.throughput_eps.stddev, 1)}</span>
+                      <span className="unit">
+                        events/s ± {formatNumber(run.summary.throughput_eps.stddev, 1)}
+                      </span>
                     </div>
                   </div>
                   <div className="metric">
@@ -68,9 +73,13 @@ export default function BenchmarksPage() {
                   <div className="metric">
                     <div className="label">Events (observed / expected)</div>
                     <div className="value">
-                      {formatNumber(run.summary.events_observed)} / {formatNumber(run.summary.events_expected)}
+                      {formatNumber(run.summary.events_observed)} /{" "}
+                      {formatNumber(run.summary.events_expected)}
                     </div>
-                    <div className="provenance">{run.summary.iterations} iterations · reconciliation mismatches {run.summary.reconciliation_mismatches}</div>
+                    <div className="provenance">
+                      {run.summary.iterations} iterations · reconciliation mismatches{" "}
+                      {run.summary.reconciliation_mismatches}
+                    </div>
                   </div>
                 </div>
                 {run.thresholds.length ? (

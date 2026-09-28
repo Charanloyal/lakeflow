@@ -15,9 +15,13 @@ export default function OverviewPage() {
       <div className="row" style={{ justifyContent: "space-between" }}>
         <div>
           <h1>Overview</h1>
-          <p className="subtitle">Live health of the CDC path. Every number shows when it was measured and where it came from.</p>
+          <p className="subtitle">
+            Live health of the CDC path. Every number shows when it was measured and where it came from.
+          </p>
         </div>
-        {overview.data ? <Badge status={overview.data.overall}>{`platform ${overview.data.overall}`}</Badge> : null}
+        {overview.data ? (
+          <Badge status={overview.data.overall}>{`platform ${overview.data.overall}`}</Badge>
+        ) : null}
       </div>
 
       <StateView {...overview}>
@@ -53,7 +57,10 @@ export default function OverviewPage() {
                         <Badge status={incident.resolved_at ? "healthy" : incident.severity}>
                           {incident.resolved_at ? "resolved" : incident.severity}
                         </Badge>{" "}
-                        {incident.title} <span className="provenance">· {formatDateTime(incident.opened_at)} · {incident.source}</span>
+                        {incident.title}{" "}
+                        <span className="provenance">
+                          · {formatDateTime(incident.opened_at)} · {incident.source}
+                        </span>
                       </li>
                     ))}
                   </ul>
