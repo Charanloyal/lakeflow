@@ -1,0 +1,51 @@
+name: Autofix
+
+# Formatting is tool-owned: on feature branches this bot applies ruff (and prettier / npm lockfile generation
+# for the frontend) and commits the result, like pre-commit.ci. CI on main only checks.
+on:
+  push:
+    branches-ignore: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: autofix-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  autofix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Ruff fix + format
+        run: |
+          pip install "ruff==$(grep -Po '(?<=^ruff==).*' requirements-dev.txt)"
+          ruff check --fix --exit-zero .
+          ruff format .
+      - uses: actions/setup-node@v7
+        if: hashFiles('frontend/package.json') != ''
+        with:
+          node-version: "22"
+      - name: Frontend lockfile + prettier
+        if: hashFiles('frontend/package.json') != ''
+        working-directory: frontend
+        run: |
+          npm install --package-lock-only --no-audit --no-fund
+          npm ci --no-audit --no-fund
+          npx prettier --write .
+      - name: Commit changes
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -A
+            git commit -m "style: automated formatting and lockfile [skip ci]"
+            git push
+          fi

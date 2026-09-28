@@ -1,0 +1,109 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python lint + unit tests (${{ matrix.python }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install tooling
+        run: |
+          pip install -r requirements-dev.txt
+          if [ "${{ matrix.python }}" = "3.12" ]; then pip install -r api/requirements.txt; fi
+      - name: Ruff lint
+        if: matrix.python == '3.12'
+        run: ruff check --output-format=github .
+      - name: Ruff format
+        if: matrix.python == '3.12'
+        run: |
+          if ! ruff format --check . > .ruff-format.txt 2>&1; then
+            cat .ruff-format.txt
+            python scripts/ci_annotate.py lines error "ruff format --check" < .ruff-format.txt
+            exit 1
+          fi
+      - name: Contracts are valid JSON Schema 2020-12
+        run: |
+          python - <<'PY'
+          import glob, json, jsonschema
+          for path in glob.glob("contracts/**/v*.schema.json", recursive=True):
+              jsonschema.Draft202012Validator.check_schema(json.load(open(path)))
+              print("ok", path)
+          PY
+      - name: Unit tests (core library, stdlib-only; 3.10 = Spark runtime interpreter)
+        run: python -m pytest -q tests/unit api/tests/test_domain.py --junitxml=.artifacts/unit.xml
+      - name: API tests (FastAPI TestClient, fake dependencies)
+        if: matrix.python == '3.12'
+        run: python -m pytest -q api/tests/test_app.py --junitxml=.artifacts/api.xml
+      - name: Annotate failures
+        if: failure()
+        run: |
+          python scripts/ci_annotate.py junit .artifacts/unit.xml "unit ${{ matrix.python }}"
+          python scripts/ci_annotate.py junit .artifacts/api.xml "api" || true
+
+  spark:
+    name: PySpark sink semantics (runtime image)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - name: Generate local .env
+        run: python3 scripts/lakeflowctl.py bootstrap --skip-docker
+      - name: Build Spark runtime + test images
+        run: docker compose --profile tools build spark spark-tests
+      - name: Run PySpark tests against the exact runtime jars and interpreter
+        run: |
+          mkdir -p .artifacts && chmod 777 .artifacts
+          docker compose --profile tools run --rm -v "$PWD/.artifacts:/artifacts" spark-tests --junitxml=/artifacts/spark.xml
+      - name: Annotate failures
+        if: failure()
+        run: python3 scripts/ci_annotate.py junit .artifacts/spark.xml spark
+
+  data-plane:
+    name: CDC data plane end-to-end (compose, no mocks)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      GIT_SHA: ${{ github.sha }}
+      CI_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+      - name: Bootstrap (.env with generated secrets)
+        run: python3 scripts/lakeflowctl.py --profile 8gb bootstrap --skip-docker
+      - name: Start data plane and wait for health
+        run: python3 scripts/lakeflowctl.py --profile 8gb up --data-plane --timeout 900
+      - name: Integration tests (PostgreSQL -> Debezium -> Kafka -> Spark -> Iceberg -> Trino)
+        run: |
+          mkdir -p .artifacts
+          python3 scripts/lakeflowctl.py --profile 8gb integration-test tests/integration --junitxml=.artifacts/integration.xml -rA
+      - name: Annotate failures
+        if: failure()
+        run: |
+          python3 scripts/ci_annotate.py junit .artifacts/integration.xml integration
+          python3 scripts/ci_annotate.py compose --profile 8gb
+      - name: Stop
+        if: always()
+        run: python3 scripts/lakeflowctl.py --profile 8gb down --volumes || true

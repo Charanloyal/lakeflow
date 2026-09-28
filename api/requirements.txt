@@ -1,0 +1,8 @@
+fastapi==0.141.1
+uvicorn==0.54.0
+pydantic==2.13.5
+psycopg[binary]==3.3.6
+confluent-kafka==2.15.1
+trino==0.340.0
+httpx==0.28.1
+prometheus-client==0.26.0

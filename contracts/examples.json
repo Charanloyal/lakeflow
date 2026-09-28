@@ -1,0 +1,42 @@
+{
+  "description": "Contract test corpus shared by the Python unit tests and the PySpark parity tests. `expect.version` is the earliest active contract version that validates the record.",
+  "base": {
+    "orders": {
+      "order_id": "3f2b8f7e-5d1a-4c9b-9f60-1a2b3c4d5e6f",
+      "customer_id": "0b7e7c1e-2f7a-4c55-8f0e-6a1d2c3b4a59",
+      "status": "PENDING",
+      "amount": "129.90",
+      "currency": "USD",
+      "created_at": "2026-09-25T10:00:00.123456Z",
+      "updated_at": "2026-09-25T10:00:00.123456Z"
+    },
+    "customers": {
+      "customer_id": "0b7e7c1e-2f7a-4c55-8f0e-6a1d2c3b4a59",
+      "email": "Ada.Lovelace@example.com",
+      "full_name": "Ada Lovelace",
+      "country": "GB",
+      "created_at": "2026-09-01T08:30:00Z",
+      "updated_at": "2026-09-01T08:30:00Z"
+    }
+  },
+  "cases": [
+    { "name": "orders v1 row", "contract": "orders", "patch": {}, "expect": { "valid": true, "version": 1 } },
+    { "name": "orders v2 channel", "contract": "orders", "patch": { "channel": "web" }, "expect": { "valid": true, "version": 2 } },
+    { "name": "orders v2 null channel", "contract": "orders", "patch": { "channel": null }, "expect": { "valid": true, "version": 2 } },
+    { "name": "orders unknown column is drift", "contract": "orders", "patch": { "coupon_code": "FALL26" }, "expect": { "valid": true, "version": 1, "drift": ["coupon_code"] } },
+    { "name": "negative amount", "contract": "orders", "patch": { "amount": "-5.00" }, "expect": { "valid": false, "violations": ["amount.pattern"] } },
+    { "name": "three decimals", "contract": "orders", "patch": { "amount": "12.345" }, "expect": { "valid": false, "violations": ["amount.pattern", "amount.decimal"] } },
+    { "name": "numeric amount", "contract": "orders", "patch": { "amount": 129.9 }, "expect": { "valid": false, "violations": ["amount.type"] } },
+    { "name": "unknown status", "contract": "orders", "patch": { "status": "SHIPPED_TO_MARS" }, "expect": { "valid": false, "violations": ["status.enum"] } },
+    { "name": "null status", "contract": "orders", "patch": { "status": null }, "expect": { "valid": false, "violations": ["status.null"] } },
+    { "name": "missing customer", "contract": "orders", "remove": ["customer_id"], "expect": { "valid": false, "violations": ["customer_id.required"] } },
+    { "name": "bad uuid", "contract": "orders", "patch": { "order_id": "not-a-uuid" }, "expect": { "valid": false, "violations": ["order_id.format"] } },
+    { "name": "impossible timestamp", "contract": "orders", "patch": { "created_at": "2026-13-45T99:00:00Z" }, "expect": { "valid": false, "violations": ["created_at.format"] } },
+    { "name": "v2-only field validated", "contract": "orders", "patch": { "channel": "fax" }, "expect": { "valid": false, "violations": ["channel.enum"] } },
+    { "name": "JPY before v3 promotion", "contract": "orders", "patch": { "currency": "JPY", "channel": "web" }, "expect": { "valid": false, "violations": ["currency.enum"], "valid_with_proposed": true, "version_with_proposed": 3 } },
+    { "name": "customer row", "contract": "customers", "patch": {}, "expect": { "valid": true, "version": 1 } },
+    { "name": "customer bad email", "contract": "customers", "patch": { "email": "ada-at-example" }, "expect": { "valid": false, "violations": ["email.format"] } },
+    { "name": "customer lowercase country", "contract": "customers", "patch": { "country": "gb" }, "expect": { "valid": false, "violations": ["country.pattern"] } },
+    { "name": "customer empty name", "contract": "customers", "patch": { "full_name": "" }, "expect": { "valid": false, "violations": ["full_name.min_length"] } }
+  ]
+}

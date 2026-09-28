@@ -1,358 +1,387 @@
+# LakeFlow local platform. Use `make up` (or `python scripts/lakeflowctl.py up`) rather than raw compose:
+# it applies the resource profile (infra/profiles/*.env), waits for health and prints useful errors.
+# Every port binds to 127.0.0.1: this stack uses local-only credentials and must never be exposed.
+
+x-restart: &restart
+  restart: unless-stopped
+
+x-logging: &logging
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "3" }
+
 services:
-  # ============================================================================
-  # 1. PostgreSQL (Source Database with Logical Replication / CDC)
-  # ============================================================================
   postgres:
-    image: postgres:16-alpine
-    container_name: dpl-postgres
-    restart: unless-stopped
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+    image: postgres:16.6-alpine
+    <<: [*restart, *logging]
+    command: >
+      postgres -c wal_level=logical -c max_replication_slots=4 -c max_wal_senders=4
+      -c max_slot_wal_keep_size=2GB -c wal_sender_timeout=60s -c shared_buffers=${POSTGRES_SHARED_BUFFERS:-128MB}
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-platform_db}
-    command: >
-      postgres
-      -c wal_level=logical
-      -c max_wal_senders=10
-      -c max_replication_slots=10
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?run make bootstrap}
+      LAKEFLOW_APP_PASSWORD: ${LAKEFLOW_APP_PASSWORD:?run make bootstrap}
+      DEBEZIUM_PASSWORD: ${DEBEZIUM_PASSWORD:?run make bootstrap}
+      ICEBERG_CATALOG_PASSWORD: ${ICEBERG_CATALOG_PASSWORD:?run make bootstrap}
+      CONTROL_DB_PASSWORD: ${CONTROL_DB_PASSWORD:?run make bootstrap}
+      AIRFLOW_DB_PASSWORD: ${AIRFLOW_DB_PASSWORD:?run make bootstrap}
+      TRINO_PG_PASSWORD: ${TRINO_PG_PASSWORD:?run make bootstrap}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./config/postgres/01-init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
-      - ./config/postgres/02-ecommerce-schema.sql:/docker-entrypoint-initdb.d/02-ecommerce-schema.sql:ro
+      - pg-data:/var/lib/postgresql/data
+      - ./platform/postgres/init:/docker-entrypoint-initdb.d:ro
+      - ./platform/postgres/migrations:/migrations:ro
+    ports: ["127.0.0.1:${POSTGRES_PORT:-5432}:5432"]
+    mem_limit: ${POSTGRES_MEM:-512m}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-platform_db}"]
+      # TCP probe: the init-time server only listens on the unix socket, so this waits for init scripts.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d lakeflow"]
       interval: 5s
       timeout: 5s
-      retries: 5
-      start_period: 10s
-    networks:
-      - data-platform-network
+      retries: 30
 
-  # ============================================================================
-  # 2. Apache Kafka (KRaft mode - Zero ZooKeeper overhead)
-  # ============================================================================
   kafka:
-    image: confluentinc/cp-kafka:7.6.0
-    container_name: dpl-kafka
-    restart: unless-stopped
-    ports:
-      - "${KAFKA_EXTERNAL_PORT:-9092}:9092"
+    image: apache/kafka:3.9.1
+    <<: [*restart, *logging]
     environment:
+      CLUSTER_ID: ${KAFKA_CLUSTER_ID:-bGFrZWZsb3ctbG9jYWwtMQ}
       KAFKA_NODE_ID: 1
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
-      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:${KAFKA_EXTERNAL_PORT:-9092}'
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,HOST://:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,HOST:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-      KAFKA_PROCESS_ROLES: 'broker,controller'
-      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:29093'
-      KAFKA_LISTENERS: 'PLAINTEXT://kafka:29092,CONTROLLER://kafka:29093,PLAINTEXT_HOST://0.0.0.0:9092'
-      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
-      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
-      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
-      CLUSTER_ID: '${KAFKA_CLUSTER_ID:-4L622nShTUiBenA3heKdRw}'
-      KAFKA_HEAP_OPTS: '-Xms256m -Xmx512m'
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_HEAP_OPTS: -Xms${KAFKA_HEAP:-512m} -Xmx${KAFKA_HEAP:-512m}
+    volumes: ["kafka-data:/var/lib/kafka/data"]
+    ports: ["127.0.0.1:${KAFKA_HOST_PORT:-29092}:29092"]
+    mem_limit: ${KAFKA_MEM:-1g}
     healthcheck:
-      test: ["CMD-SHELL", "nc -z localhost 9092 || exit 1"]
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1"]
       interval: 10s
-      timeout: 5s
-      retries: 5
+      timeout: 15s
+      retries: 20
       start_period: 15s
-    volumes:
-      - kafka_data:/tmp/kraft-combined-logs
-    networks:
-      - data-platform-network
 
-  # ============================================================================
-  # 3. Kafka Connect with Debezium (PostgreSQL CDC Engine)
-  # ============================================================================
-  kafka-connect:
-    image: debezium/connect:2.6.0.Final
-    container_name: dpl-kafka-connect
-    restart: unless-stopped
-    ports:
-      - "${KAFKA_CONNECT_PORT:-8083}:8083"
+  kafka-init:
+    image: apache/kafka:3.9.1
+    <<: *logging
+    entrypoint: ["bash", "/config/create-topics.sh"]
+    environment: { KAFKA_BOOTSTRAP_SERVERS: "kafka:9092" }
+    volumes: ["./platform/kafka:/config:ro"]
+    depends_on: { kafka: { condition: service_healthy } }
+    mem_limit: 384m
+    restart: "no"
+
+  connect:
+    image: quay.io/debezium/connect:2.7.3.Final
+    <<: [*restart, *logging]
     environment:
-      BOOTSTRAP_SERVERS: kafka:29092
-      GROUP_ID: 1
+      BOOTSTRAP_SERVERS: kafka:9092
+      GROUP_ID: lakeflow-connect
       CONFIG_STORAGE_TOPIC: _connect_configs
       OFFSET_STORAGE_TOPIC: _connect_offsets
       STATUS_STORAGE_TOPIC: _connect_status
-      KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
-      VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
-      ENABLE_DEBEZIUM_SCRIPTING: "false"
-      HEAP_OPTS: "-Xms256m -Xmx512m"
+      CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      STATUS_STORAGE_REPLICATION_FACTOR: 1
+      OFFSET_FLUSH_INTERVAL_MS: 5000
+      CONNECT_CONFIG_PROVIDERS: env
+      CONNECT_CONFIG_PROVIDERS_ENV_CLASS: org.apache.kafka.common.config.provider.EnvVarConfigProvider
+      CONNECT_PRODUCER_COMPRESSION_TYPE: lz4
+      HEAP_OPTS: -Xms${CONNECT_HEAP:-512m} -Xmx${CONNECT_HEAP:-512m}
+      DEBEZIUM_DB_PASSWORD: ${DEBEZIUM_PASSWORD:?run make bootstrap}
+    ports: ["127.0.0.1:${CONNECT_PORT:-8083}:8083"]
     depends_on:
-      kafka:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
+      kafka-init: { condition: service_completed_successfully }
+      postgres: { condition: service_healthy }
+    mem_limit: ${CONNECT_MEM:-1g}
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8083/connectors || exit 1"]
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8083 && printf 'GET /connectors HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -q ' 200'"]
       interval: 10s
       timeout: 5s
-      retries: 6
-      start_period: 30s
-    networks:
-      - data-platform-network
+      retries: 30
+      start_period: 20s
 
-  # ============================================================================
-  # 4. MinIO (S3-Compatible Object Store for Apache Iceberg Lakehouse)
-  # ============================================================================
+  connect-init:
+    image: curlimages/curl:8.11.1
+    <<: *logging
+    entrypoint: ["sh", "/config/register-connector.sh"]
+    volumes: ["./platform/debezium:/config:ro"]
+    depends_on: { connect: { condition: service_healthy } }
+    restart: "no"
+
   minio:
-    image: minio/minio:RELEASE.2024-05-10T01-41-38Z
-    container_name: dpl-minio
-    restart: unless-stopped
-    ports:
-      - "${MINIO_API_PORT:-9000}:9000"
-      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    # Upstream MinIO stopped publishing community images in 2025; this is the last Bitnami build (frozen).
+    image: bitnamilegacy/minio:2025.7.23-debian-12-r5
+    <<: [*restart, *logging]
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-admin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-password123}
-    command: server /data --console-address ":9001"
-    volumes:
-      - minio_data:/data
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-lakeflow}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?run make bootstrap}
+      MINIO_DEFAULT_BUCKETS: warehouse
+      MINIO_PROMETHEUS_AUTH_TYPE: public
+    volumes: ["minio-data:/bitnami/minio/data"]
+    ports: ["127.0.0.1:${MINIO_PORT:-9000}:9000", "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"]
+    mem_limit: ${MINIO_MEM:-512m}
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:9000/minio/health/live || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-    networks:
-      - data-platform-network
-
-  # MinIO Bucket Auto-Provisioner (One-shot setup)
-  minio-init:
-    image: minio/mc:RELEASE.2024-05-09T17-04-24Z
-    container_name: dpl-minio-init
-    depends_on:
-      minio:
-        condition: service_healthy
-    entrypoint: >
-      /bin/sh -c "
-      /usr/bin/mc alias set myminio http://minio:9000 ${MINIO_ROOT_USER:-admin} ${MINIO_ROOT_PASSWORD:-password123};
-      /usr/bin/mc mb --ignore-existing myminio/warehouse;
-      /usr/bin/mc mb --ignore-existing myminio/lakeflow;
-      /usr/bin/mc mb --ignore-existing myminio/airflow-logs;
-      exit 0;
-      "
-    networks:
-      - data-platform-network
-
-  # ============================================================================
-  # 5. Apache Spark (Master & Worker - Distributed Compute)
-  # ============================================================================
-  spark-master:
-    image: bitnami/spark:3.5.1
-    container_name: dpl-spark-master
-    restart: unless-stopped
-    ports:
-      - "${SPARK_MASTER_PORT:-7077}:7077"
-      - "${SPARK_MASTER_UI_PORT:-8080}:8080"
-    environment:
-      SPARK_MODE: master
-      SPARK_RPC_AUTHENTICATION_ENABLED: "no"
-      SPARK_RPC_ENCRYPTION_ENABLED: "no"
-      SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED: "no"
-      SPARK_SSL_ENABLED: "no"
-      SPARK_DAEMON_MEMORY: 512m
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8080 || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 15s
-    networks:
-      - data-platform-network
-
-  spark-worker:
-    image: bitnami/spark:3.5.1
-    container_name: dpl-spark-worker
-    restart: unless-stopped
-    ports:
-      - "${SPARK_WORKER_UI_PORT:-8081}:8081"
-    environment:
-      SPARK_MODE: worker
-      SPARK_MASTER_URL: spark://spark-master:7077
-      SPARK_WORKER_MEMORY: 1g
-      SPARK_WORKER_CORES: 2
-      SPARK_RPC_AUTHENTICATION_ENABLED: "no"
-      SPARK_RPC_ENCRYPTION_ENABLED: "no"
-      SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED: "no"
-      SPARK_SSL_ENABLED: "no"
-    depends_on:
-      spark-master:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8081 || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 15s
-    networks:
-      - data-platform-network
-
-  # ============================================================================
-  # 6. Trino (Distributed SQL Query Engine with Iceberg & Postgres Catalogs)
-  # ============================================================================
-  trino:
-    image: trinodb/trino:446
-    container_name: dpl-trino
-    restart: unless-stopped
-    ports:
-      - "${TRINO_HTTP_PORT:-8082}:8080"
-    volumes:
-      - ./config/trino/catalog:/etc/trino/catalog:ro
-      - ./config/trino/jvm.config:/etc/trino/jvm.config:ro
-    depends_on:
-      minio:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8080/v1/info || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 6
-      start_period: 30s
-    networks:
-      - data-platform-network
-
-  # ============================================================================
-  # 7. Redis (Low-Latency Cache & Online Feature Store)
-  # ============================================================================
-  redis:
-    image: redis:7.2-alpine
-    container_name: dpl-redis
-    restart: unless-stopped
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD-SHELL", "redis-cli ping | grep PONG || exit 1"]
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /minio/health/live HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -q ' 200'"]
       interval: 5s
-      timeout: 3s
-      retries: 3
-      start_period: 5s
-    networks:
-      - data-platform-network
+      timeout: 5s
+      retries: 30
 
-  # ============================================================================
-  # 8. Apache Airflow (Workflow Orchestrator in Standalone Mode)
-  # ============================================================================
+  iceberg-rest:
+    # Reference Iceberg REST catalog (JdbcCatalog on PostgreSQL). Production: Polaris, Glue, Unity, Nessie, Lakekeeper.
+    image: tabulario/iceberg-rest:1.6.0
+    <<: [*restart, *logging]
+    environment:
+      CATALOG_WAREHOUSE: s3://warehouse/
+      CATALOG_IO__IMPL: org.apache.iceberg.aws.s3.S3FileIO
+      CATALOG_S3_ENDPOINT: http://minio:9000
+      CATALOG_S3_PATH__STYLE__ACCESS: "true"
+      CATALOG_URI: jdbc:postgresql://postgres:5432/iceberg_catalog
+      CATALOG_JDBC_USER: iceberg_catalog
+      CATALOG_JDBC_PASSWORD: ${ICEBERG_CATALOG_PASSWORD:?run make bootstrap}
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-lakeflow}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?run make bootstrap}
+      AWS_REGION: us-east-1
+      JAVA_TOOL_OPTIONS: -Xmx${ICEBERG_REST_HEAP:-256m}
+    depends_on:
+      postgres: { condition: service_healthy }
+      minio: { condition: service_healthy }
+    mem_limit: ${ICEBERG_REST_MEM:-512m}
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8181 && printf 'GET /v1/config HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -q ' 200'"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+
+  spark:
+    build: { context: ., dockerfile: spark/Dockerfile, target: runtime }
+    image: lakeflow/spark-stream:local
+    <<: [*restart, *logging]
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      ICEBERG_CATALOG_URI: http://iceberg-rest:8181
+      S3_ENDPOINT: http://minio:9000
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-lakeflow}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?run make bootstrap}
+      LAKEFLOW_PII_HMAC_KEY: ${LAKEFLOW_PII_HMAC_KEY:?run make bootstrap}
+      TRIGGER_INTERVAL_SECONDS: ${TRIGGER_INTERVAL_SECONDS:-5}
+      MAX_OFFSETS_PER_TRIGGER: ${MAX_OFFSETS_PER_TRIGGER:-20000}
+      ALLOWED_LATENESS_SECONDS: ${ALLOWED_LATENESS_SECONDS:-300}
+      SPARK_LOCAL_CORES: ${SPARK_LOCAL_CORES:-2}
+      SPARK_DRIVER_MEMORY: ${SPARK_DRIVER_MEMORY:-1500m}
+    volumes:
+      - spark-checkpoints:/checkpoints
+      - stream-control:/control
+      - ./contracts:/opt/lakeflow/contracts:ro
+    ports: ["127.0.0.1:${SPARK_UI_PORT:-4040}:4040", "127.0.0.1:${SPARK_METRICS_PORT:-9108}:9108"]
+    depends_on:
+      kafka-init: { condition: service_completed_successfully }
+      iceberg-rest: { condition: service_healthy }
+    mem_limit: ${SPARK_MEM:-2560m}
+    cpus: ${SPARK_CPUS:-2}
+
+  trino:
+    image: trinodb/trino:476
+    <<: [*restart, *logging]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-lakeflow}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?run make bootstrap}
+      TRINO_PG_PASSWORD: ${TRINO_PG_PASSWORD:?run make bootstrap}
+    volumes: ["./platform/trino/catalog:/etc/trino/catalog:ro"]
+    ports: ["127.0.0.1:${TRINO_PORT:-8088}:8080"]
+    depends_on:
+      iceberg-rest: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+    mem_limit: ${TRINO_MEM:-2g}
+    healthcheck:
+      test: ["CMD", "/usr/lib/trino/bin/health-check"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  api:
+    build: { context: ., dockerfile: api/Dockerfile }
+    image: lakeflow/api:local
+    <<: [*restart, *logging]
+    environment:
+      LAKEFLOW_PG_DSN: postgresql://lakeflow_app:${LAKEFLOW_APP_PASSWORD}@postgres:5432/lakeflow
+      LAKEFLOW_CONTROL_DSN: postgresql://lakeflow_control:${CONTROL_DB_PASSWORD}@postgres:5432/lakeflow_control
+      LAKEFLOW_KAFKA_BOOTSTRAP: kafka:9092
+      LAKEFLOW_CONNECT_URL: http://connect:8083
+      LAKEFLOW_TRINO_HOST: trino
+      LAKEFLOW_TRINO_PORT: "8080"
+      LAKEFLOW_PROMETHEUS_URL: http://prometheus:9090
+      LAKEFLOW_SPARK_METRICS_URL: http://spark:9108/metrics
+      LAKEFLOW_CHECKPOINT_DIR: /checkpoints/lakeflow_cdc
+      LAKEFLOW_CONTROL_DIR: /control
+      LAKEFLOW_CONTRACTS_DIR: /app/contracts
+      LAKEFLOW_ADR_DIR: /app/docs/adr
+      LAKEFLOW_BENCHMARK_DIR: /app/benchmarks/results
+      LAKEFLOW_MIGRATIONS_DIR: /migrations
+      LAKEFLOW_ADMIN_USER: ${LAKEFLOW_ADMIN_USER:-admin}
+      LAKEFLOW_ADMIN_PASSWORD: ${LAKEFLOW_ADMIN_PASSWORD:?run make bootstrap}
+      LAKEFLOW_VIEWER_USER: ${LAKEFLOW_VIEWER_USER:-viewer}
+      LAKEFLOW_VIEWER_PASSWORD: ${LAKEFLOW_VIEWER_PASSWORD:?run make bootstrap}
+      LAKEFLOW_SESSION_SECRET: ${LAKEFLOW_SESSION_SECRET:?run make bootstrap}
+      LAKEFLOW_RECOVERY_LAB_ENABLED: ${LAKEFLOW_RECOVERY_LAB_ENABLED:-true}
+      LAKEFLOW_CORS_ORIGINS: ${LAKEFLOW_CORS_ORIGINS:-http://localhost:3000}
+      LAKEFLOW_ENVIRONMENT: local-demo
+    volumes:
+      - spark-checkpoints:/checkpoints:ro
+      - stream-control:/control
+      - ./contracts:/app/contracts:ro
+      - ./docs/adr:/app/docs/adr:ro
+      - ./benchmarks:/app/benchmarks:ro
+      - ./platform/postgres/migrations:/migrations:ro
+    ports: ["127.0.0.1:${API_PORT:-8000}:8000"]
+    depends_on: { postgres: { condition: service_healthy } }
+    mem_limit: ${API_MEM:-512m}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/api/health', timeout=4)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  web:
+    build: { context: ., dockerfile: frontend/Dockerfile }
+    image: lakeflow/web:local
+    <<: [*restart, *logging]
+    ports: ["127.0.0.1:${WEB_PORT:-8080}:8080"]
+    depends_on: { api: { condition: service_started } }
+    mem_limit: 64m
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    profiles: ["observability"]
+    <<: [*restart, *logging]
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus", "--storage.tsdb.retention.time=2d"]
+    volumes:
+      - ./observability/prometheus:/etc/prometheus:ro
+      - prometheus-data:/prometheus
+    ports: ["127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"]
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:9090/-/healthy"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+
+  grafana:
+    image: grafana/grafana:11.5.2
+    profiles: ["observability"]
+    <<: [*restart, *logging]
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?run make bootstrap}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports: ["127.0.0.1:${GRAFANA_PORT:-3000}:3000"]
+    depends_on: { prometheus: { condition: service_healthy } }
+    mem_limit: 256m
+
   airflow:
-    image: apache/airflow:2.9.1
-    container_name: dpl-airflow
-    restart: unless-stopped
-    ports:
-      - "${AIRFLOW_WEBSERVER_PORT:-8888}:8080"
+    build: { context: ., dockerfile: airflow/Dockerfile }
+    image: lakeflow/airflow:local
+    profiles: ["maintenance"]
+    <<: [*restart, *logging]
+    command: standalone
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/airflow
-      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:-46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqJZPo=}
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
-      AIRFLOW__CORE__LOGGING_LEVEL: INFO
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:?run make bootstrap}
+      AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY:?run make bootstrap}
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:${AIRFLOW_DB_PASSWORD}@postgres:5432/airflow
       AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "false"
       _AIRFLOW_DB_MIGRATE: "true"
       _AIRFLOW_WWW_USER_CREATE: "true"
-      _AIRFLOW_WWW_USER_USERNAME: ${AIRFLOW_USER:-admin}
-      _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_PASSWORD:-admin}
-    command: standalone
+      _AIRFLOW_WWW_USER_USERNAME: ${AIRFLOW_ADMIN_USER:-admin}
+      _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD:?run make bootstrap}
+      LAKEFLOW_TRINO_HOST: trino
+      LAKEFLOW_TRINO_PORT: "8080"
+      LAKEFLOW_PG_DSN: postgresql://lakeflow_app:${LAKEFLOW_APP_PASSWORD}@postgres:5432/lakeflow
+      LAKEFLOW_API_URL: http://api:8000
+      LAKEFLOW_ADMIN_USER: ${LAKEFLOW_ADMIN_USER:-admin}
+      LAKEFLOW_ADMIN_PASSWORD: ${LAKEFLOW_ADMIN_PASSWORD:?run make bootstrap}
+      LAKEFLOW_CONTRACTS_DIR: /opt/airflow/contracts
     volumes:
-      - airflow_logs:/opt/airflow/logs
-      - ./dags:/opt/airflow/dags
-      - ./plugins:/opt/airflow/plugins
+      - ./airflow/dags:/opt/airflow/dags:ro
+      - ./contracts:/opt/airflow/contracts:ro
+      - airflow-logs:/opt/airflow/logs
+    ports: ["127.0.0.1:${AIRFLOW_PORT:-8089}:8080"]
     depends_on:
-      postgres:
-        condition: service_healthy
+      postgres: { condition: service_healthy }
+      trino: { condition: service_healthy }
+    mem_limit: ${AIRFLOW_MEM:-1536m}
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
       interval: 15s
-      timeout: 10s
-      retries: 6
-      start_period: 35s
-    networks:
-      - data-platform-network
-
-  # ============================================================================
-  # 9. Prometheus (Metrics Scraping & Monitoring Engine)
-  # ============================================================================
-  prometheus:
-    image: prom/prometheus:v2.52.0
-    container_name: dpl-prometheus
-    restart: unless-stopped
-    ports:
-      - "${PROMETHEUS_PORT:-9090}:9090"
-    volumes:
-      - ./config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus_data:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-    healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://localhost:9090/-/healthy || exit 1"]
-      interval: 10s
       timeout: 5s
-      retries: 3
-      start_period: 10s
-    networks:
-      - data-platform-network
+      retries: 20
+      start_period: 60s
 
-  # ============================================================================
-  # 10. Grafana (Observability & Telemetry Dashboards)
-  # ============================================================================
-  grafana:
-    image: grafana/grafana:10.4.2
-    container_name: dpl-grafana
-    restart: unless-stopped
-    ports:
-      - "${GRAFANA_PORT:-3000}:3000"
+  # ---- test tooling (profile "tools"): used by `make test`, `make integration-test`, `make benchmark` ----
+  tools:
+    build: { context: ., dockerfile: tests/Dockerfile }
+    image: lakeflow/tools:local
+    profiles: ["tools"]
+    working_dir: /repo
+    user: "${HOST_UID:-185}:${HOST_GID:-185}"
     environment:
-      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
-      GF_USERS_ALLOW_SIGN_UP: "false"
+      HOME: /tmp
+      PYTHONPATH: /repo/libs:/repo/api
+      LAKEFLOW_API_URL: http://api:8000
+      LAKEFLOW_PG_DSN: postgresql://lakeflow_app:${LAKEFLOW_APP_PASSWORD}@postgres:5432/lakeflow
+      LAKEFLOW_KAFKA_BOOTSTRAP: kafka:9092
+      LAKEFLOW_CONNECT_URL: http://connect:8083
+      LAKEFLOW_TRINO_HOST: trino
+      LAKEFLOW_TRINO_PORT: "8080"
+      LAKEFLOW_CONTROL_DIR: /control
+      LAKEFLOW_ADMIN_USER: ${LAKEFLOW_ADMIN_USER:-admin}
+      LAKEFLOW_ADMIN_PASSWORD: ${LAKEFLOW_ADMIN_PASSWORD:?run make bootstrap}
+      LAKEFLOW_VIEWER_USER: ${LAKEFLOW_VIEWER_USER:-viewer}
+      LAKEFLOW_VIEWER_PASSWORD: ${LAKEFLOW_VIEWER_PASSWORD:?run make bootstrap}
+      LAKEFLOW_SESSION_SECRET: ${LAKEFLOW_SESSION_SECRET:?run make bootstrap}
+      LAKEFLOW_PII_HMAC_KEY: ${LAKEFLOW_PII_HMAC_KEY:?run make bootstrap}
+      GIT_SHA: ${GIT_SHA:-unknown}
+      CI_RUN_URL: ${CI_RUN_URL:-}
     volumes:
-      - grafana_data:/var/lib/grafana
-      - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
-    depends_on:
-      prometheus:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 15s
-    networks:
-      - data-platform-network
+      - .:/repo
+      - stream-control:/control
+    mem_limit: 768m
 
-# ==============================================================================
-# Persistent Named Volumes
-# ==============================================================================
+  spark-tests:
+    build: { context: ., dockerfile: spark/Dockerfile, target: test }
+    image: lakeflow/spark-tests:local
+    profiles: ["tools"]
+    environment: { ICEBERG_PACKAGES: "" }
+    mem_limit: 2g
+
 volumes:
-  postgres_data:
-    name: dpl_postgres_data
-  kafka_data:
-    name: dpl_kafka_data
-  minio_data:
-    name: dpl_minio_data
-  redis_data:
-    name: dpl_redis_data
-  airflow_logs:
-    name: dpl_airflow_logs
-  prometheus_data:
-    name: dpl_prometheus_data
-  grafana_data:
-    name: dpl_grafana_data
-
-# ==============================================================================
-# Unified Clean Network
-# ==============================================================================
-networks:
-  data-platform-network:
-    name: data-platform-network
-    driver: bridge
+  pg-data:
+  kafka-data:
+  minio-data:
+  spark-checkpoints:
+  stream-control:
+  prometheus-data:
+  grafana-data:
+  airflow-logs:

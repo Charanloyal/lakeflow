@@ -1,0 +1,31 @@
+[project]
+name = "lakeflow"
+version = "2.0.0"
+description = "Production-oriented reference implementation of a CDC lakehouse (PostgreSQL -> Debezium -> Kafka -> Spark -> Iceberg -> Trino)"
+requires-python = ">=3.10"
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+extend-exclude = ["frontend", "**/node_modules"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM"]
+# E501: the formatter owns line length; S101/S311/S603/S607: asserts, seeded (non-crypto) RNG and fixed
+# subprocess argv are intentional; B008: FastAPI dependency defaults.
+ignore = ["E501", "S101", "S311", "S603", "S607", "B008", "SIM108"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["S", "B", "SIM"]
+"benchmarks/**" = ["S608"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["lakeflow_core", "lakeflow_stream", "lakeflow_api"]
+
+[tool.pytest.ini_options]
+pythonpath = ["libs", "api"]
+testpaths = ["tests/unit", "api/tests"]
+markers = [
+  "integration: needs the running compose stack",
+  "e2e: end-to-end scenario through the control-plane API",
+]

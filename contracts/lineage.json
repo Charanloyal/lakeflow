@@ -1,0 +1,24 @@
+{
+  "description": "Declarative lineage for the core LakeFlow path. The API enriches it with live row counts and snapshot times; impact analysis walks it downstream.",
+  "datasets": [
+    { "id": "postgres.shop.customers", "layer": "source", "owner": "customer-identity", "contract": "customers", "description": "OLTP customer table (direct PII)" },
+    { "id": "postgres.shop.orders", "layer": "source", "owner": "commerce-platform", "contract": "orders", "description": "OLTP orders table" },
+    { "id": "kafka.lakeflow.shop.customers", "layer": "stream", "owner": "data-platform", "description": "Debezium change events, key = customer_id, 3 partitions" },
+    { "id": "kafka.lakeflow.shop.orders", "layer": "stream", "owner": "data-platform", "description": "Debezium change events, key = order_id, 3 partitions" },
+    { "id": "kafka.lakeflow.replay.cdc", "layer": "stream", "owner": "data-platform", "description": "DLQ replay topic (original topic in headers)" },
+    { "id": "lakehouse.bronze.cdc_events", "layer": "bronze", "owner": "data-platform", "description": "Append-only, deduplicated change log with Kafka coordinates and apply outcome" },
+    { "id": "lakehouse.ops.dlq_events", "layer": "ops", "owner": "data-platform", "description": "Rejected records with reason codes and replay status" },
+    { "id": "lakehouse.ops.batch_commits", "layer": "ops", "owner": "data-platform", "description": "One row per micro-batch: offsets, counts, snapshot ids, freshness" },
+    { "id": "lakehouse.silver.customers", "layer": "silver", "owner": "customer-identity", "contract": "customers", "description": "Current customer state, email HMAC-hashed, name dropped" },
+    { "id": "lakehouse.silver.orders", "layer": "silver", "owner": "commerce-platform", "contract": "orders", "description": "Current order state with soft-delete tombstones" },
+    { "id": "lakehouse.ops.quality_results", "layer": "ops", "owner": "data-platform", "description": "Contract and reconciliation check history" },
+    { "id": "trino.analytics.order_status_daily", "layer": "consumption", "owner": "analytics", "description": "Example analytical query used by the Trino benchmark" }
+  ],
+  "jobs": [
+    { "id": "debezium.lakeflow-cdc", "kind": "cdc-connector", "owner": "data-platform", "inputs": ["postgres.shop.customers", "postgres.shop.orders"], "outputs": ["kafka.lakeflow.shop.customers", "kafka.lakeflow.shop.orders"] },
+    { "id": "spark.orders_cdc_stream", "kind": "spark-structured-streaming", "owner": "data-platform", "inputs": ["kafka.lakeflow.shop.customers", "kafka.lakeflow.shop.orders", "kafka.lakeflow.replay.cdc"], "outputs": ["lakehouse.bronze.cdc_events", "lakehouse.silver.customers", "lakehouse.silver.orders", "lakehouse.ops.dlq_events", "lakehouse.ops.batch_commits"] },
+    { "id": "api.dlq_replay", "kind": "operator-action", "owner": "data-platform", "inputs": ["lakehouse.ops.dlq_events"], "outputs": ["kafka.lakeflow.replay.cdc"] },
+    { "id": "airflow.lakeflow_data_validation", "kind": "airflow-dag", "owner": "data-platform", "inputs": ["lakehouse.silver.orders", "lakehouse.silver.customers", "lakehouse.bronze.cdc_events", "postgres.shop.orders", "postgres.shop.customers"], "outputs": ["lakehouse.ops.quality_results"] },
+    { "id": "trino.order_status_daily", "kind": "sql-query", "owner": "analytics", "inputs": ["lakehouse.silver.orders"], "outputs": ["trino.analytics.order_status_daily"] }
+  ]
+}

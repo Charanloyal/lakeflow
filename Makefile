@@ -1,48 +1,48 @@
-.PHONY: help config up down restart status logs clean verify
+PY ?= python3
+CTL = $(PY) scripts/lakeflowctl.py
+PROFILE ?=
+PROFILE_ARG = $(if $(PROFILE),--profile $(PROFILE),)
 
-help:
-	@echo "========================================================================"
-	@echo " Data Platform Lab - Operational Commands"
-	@echo "========================================================================"
-	@echo " make config     - Validate and render docker-compose configuration"
-	@echo " make up         - Start all platform services in background"
-	@echo " make down       - Stop all platform services"
-	@echo " make restart    - Restart all platform services"
-	@echo " make status     - Check status and health of all containers"
-	@echo " make logs       - Tail logs from all services"
-	@echo " make verify     - Run automated health probes across all services"
-	@echo " make clean      - Stop containers and remove persistent volumes"
-	@echo "========================================================================"
+.PHONY: help bootstrap up down clean demo test integration-test benchmark status doctor logs migrate lint
 
-config:
-	docker compose config
+help: ## List targets
+	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-18s %s\n", $$1, $$2}'
 
-up:
-	docker compose up -d
+bootstrap: ## Check prerequisites, generate .env secrets, pull and build images
+	$(CTL) $(PROFILE_ARG) bootstrap
 
-down:
-	docker compose down
+up: ## Start the platform for the selected profile (PROFILE=8gb|16gb) and wait for health
+	$(CTL) $(PROFILE_ARG) up
 
-restart:
-	docker compose down && docker compose up -d
+demo: ## Guided CLI demo: insert, update, crash Spark, delete, verify uniqueness
+	$(CTL) $(PROFILE_ARG) demo
 
-status:
-	docker compose ps
+test: ## Unit tests (stdlib) + API and PySpark tests in containers
+	$(CTL) $(PROFILE_ARG) test
 
-logs:
-	docker compose logs -f
+integration-test: ## Integration + end-to-end tests against the running stack
+	$(CTL) $(PROFILE_ARG) integration-test
 
-test:
-	python -m unittest discover -s tests -p "test_*.py" -v
+benchmark: ## Deterministic benchmark; raw JSON lands in benchmarks/results/
+	$(CTL) $(PROFILE_ARG) benchmark
 
-demo:
-	python scripts/demo.py
+down: ## Stop containers (keeps data volumes)
+	$(CTL) $(PROFILE_ARG) down
 
-benchmark:
-	python apps/benchmarks/benchmark_engine.py
+clean: ## Stop containers and delete all data volumes
+	$(CTL) $(PROFILE_ARG) down --volumes
 
-verify:
-	python scripts/verify_health.py
+status: ## Container status
+	$(CTL) $(PROFILE_ARG) status
 
-clean:
-	docker compose down -v --remove-orphans
+doctor: ## Prerequisite and health diagnostics
+	$(CTL) $(PROFILE_ARG) doctor
+
+logs: ## Tail logs (SERVICE=spark)
+	$(CTL) $(PROFILE_ARG) logs $(SERVICE)
+
+migrate: ## Apply source schema migrations (contract v2 channel column)
+	$(CTL) $(PROFILE_ARG) migrate
+
+lint: ## Python lint and format check
+	ruff check . && ruff format --check .
