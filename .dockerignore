@@ -1,0 +1,14 @@
+.git
+.github
+.env
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+**/node_modules
+frontend/.next
+frontend/out
+frontend/playwright-report
+frontend/test-results
+benchmarks/.scratch
+.artifacts
+docs/assets
