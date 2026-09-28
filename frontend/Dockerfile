@@ -1,5 +1,5 @@
 # Build the static export, then serve it from unprivileged nginx (uid 101) with /api proxied to FastAPI.
-FROM node:22-alpine AS build
+FROM node:26-alpine AS build
 WORKDIR /app
 COPY frontend/package.json frontend/package-lock.json* ./
 RUN if [ -f package-lock.json ]; then npm ci --no-audit --no-fund; else npm install --no-audit --no-fund; fi
