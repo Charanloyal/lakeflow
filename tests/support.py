@@ -90,11 +90,21 @@ def bronze_events(order_id: str) -> list[dict]:
 
 
 def wait_visible(order_id: str, predicate=lambda row: True, timeout: float = 240) -> dict:
-    return eventually(
+    """Silver commits before bronze within a batch, so also wait for the batch record (its last write)."""
+    row = eventually(
         lambda: (row := silver_order(order_id)) and predicate(row) and row,
         timeout=timeout,
         what=f"order {order_id} in silver",
     )
+    eventually(
+        lambda: trino_rows(
+            "SELECT 1 AS ok FROM lakehouse.ops.batch_commits WHERE stream_epoch = ? AND batch_id = ?",
+            [row["_stream_epoch"], row["_batch_id"]],
+        ),
+        timeout=60,
+        what=f"batch {row['_batch_id']} commit record",
+    )
+    return row
 
 
 def marker(timeout: float = 240) -> str:

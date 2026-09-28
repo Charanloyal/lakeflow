@@ -82,8 +82,8 @@ def trace(ctx, table: str, key: str) -> dict:
                 record["snapshot_ids"] = _json(record.get("snapshot_ids")) or {}
                 batches[(record["stream_epoch"], record["batch_id"])] = record
         silver_rows, trino_ms = ctx.clients.trino(
-            f"SELECT * FROM lakehouse.{contract.target_table} WHERE {pk} = ?",
-            [key],  # noqa: S608
+            f"SELECT * FROM lakehouse.{contract.target_table} WHERE {pk} = ?",  # noqa: S608
+            [key],
         )
         silver_row = silver_rows[0] if silver_rows else None
         sources.append("Trino: bronze.cdc_events, ops.dlq_events, ops.batch_commits, " + contract.target_table)

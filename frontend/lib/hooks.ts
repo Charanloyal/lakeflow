@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { api, API_BASE, ApiError } from "./api";
+import { api, API_BASE, ApiError, SNAPSHOT } from "./api";
 
 export interface ApiState<T> {
   data?: T;
@@ -55,11 +55,11 @@ export function useApi<T>(path: string | null, intervalMs = 0): ApiState<T> {
   return { ...state, stale, reload };
 }
 
-export type LiveStatus = "connecting" | "live" | "offline";
+export type LiveStatus = "connecting" | "live" | "offline" | "recorded";
 
 /** Server-sent events from /api/stream/live (cookie-authenticated; the browser reconnects automatically). */
 export function useLiveStream(handlers: Record<string, (payload: unknown) => void>): LiveStatus {
-  const [status, setStatus] = useState<LiveStatus>("connecting");
+  const [status, setStatus] = useState<LiveStatus>(SNAPSHOT ? "recorded" : "connecting");
   const handlersRef = useRef(handlers);
 
   useEffect(() => {
@@ -67,6 +67,7 @@ export function useLiveStream(handlers: Record<string, (payload: unknown) => voi
   });
 
   useEffect(() => {
+    if (SNAPSHOT) return;
     const source = new EventSource(`${API_BASE}/api/stream/live`, { withCredentials: true });
     source.onopen = () => setStatus("live");
     source.onerror = () => setStatus("offline");

@@ -474,3 +474,21 @@ label {
     transition: none !important;
   }
 }
+
+.snapshot-banner {
+  padding: 10px 16px;
+  background: rgba(210, 153, 34, 0.12);
+  border-bottom: 1px solid var(--warn);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.snapshot-banner a {
+  color: var(--accent);
+}
+
+.badge.recorded {
+  border-color: var(--warn);
+  color: var(--warn);
+}

@@ -32,3 +32,4 @@ benchmarks/.scratch/
 Thumbs.db
 .idea/
 .vscode/
+frontend/public/snapshot/

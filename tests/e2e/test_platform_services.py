@@ -41,7 +41,7 @@ def run_dag(client: httpx.Client, dag_id: str, conf: dict | None = None, timeout
     created = client.post(f"/dags/{dag_id}/dagRuns", json={"conf": conf or {}})
     assert created.status_code == 200, created.text
     run_id = created.json()["dag_run_id"]
-    return eventually(
+    run = eventually(
         lambda: (
             (run := client.get(f"/dags/{dag_id}/dagRuns/{run_id}").json())["state"] in ("success", "failed") and run
         ),
@@ -49,6 +49,23 @@ def run_dag(client: httpx.Client, dag_id: str, conf: dict | None = None, timeout
         interval=5,
         what=f"{dag_id} run {run_id}",
     )
+    if run["state"] != "success":
+        pytest.fail(f"{dag_id} run {run_id} {run['state']}:\n{task_logs(client, dag_id, run_id)}")
+    return run
+
+
+def task_logs(client: httpx.Client, dag_id: str, run_id: str) -> str:
+    base = f"/dags/{dag_id}/dagRuns/{run_id}/taskInstances"
+    out = []
+    for ti in client.get(base).json().get("task_instances", []):
+        if ti["state"] == "success":
+            continue
+        params = {"map_index": ti["map_index"]} if ti.get("map_index", -1) >= 0 else {}
+        log = client.get(
+            f"{base}/{ti['task_id']}/logs/{max(ti['try_number'], 1)}", params=params, headers={"Accept": "text/plain"}
+        )
+        out.append(f"--- {ti['task_id']}[{ti.get('map_index')}] {ti['state']}\n{log.text[-2500:]}")
+    return "\n".join(out)
 
 
 def trino_now():

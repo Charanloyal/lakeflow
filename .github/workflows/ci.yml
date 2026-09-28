@@ -142,7 +142,7 @@ jobs:
           fi
       - name: ESLint
         run: |
-          if ! npx eslint . --format unix > ../.eslint.txt 2>&1; then
+          if ! npx eslint . > ../.eslint.txt 2>&1; then
             cat ../.eslint.txt; python3 ../scripts/ci_annotate.py lines error "eslint" < ../.eslint.txt; exit 1
           fi
       - name: Build (next build type-checks the app)
@@ -155,6 +155,8 @@ jobs:
     name: Full stack e2e, 16gb profile (API, UI, Airflow, Prometheus, Grafana)
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+    permissions:
+      contents: write
     env:
       GIT_SHA: ${{ github.sha }}
       CI_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -178,17 +180,46 @@ jobs:
         run: |
           mkdir -p .artifacts
           python3 scripts/lakeflowctl.py --profile 16gb integration-test tests/e2e --junitxml=.artifacts/e2e.xml -rA
+      - name: Benchmark (real stack, deterministic seed, CI thresholds)
+        run: python3 scripts/lakeflowctl.py --profile 16gb benchmark --bench-profile ci --iterations 3 --events 300
       - name: Install Playwright
         working-directory: frontend
         run: |
           if [ -f package-lock.json ]; then npm ci --no-audit --no-fund; else npm install --no-audit --no-fund; fi
           npx playwright install --with-deps chromium
-      - name: UI tests (Playwright against the running stack)
+      - name: UI tests (Playwright against the running stack; records the demo snapshot)
         working-directory: frontend
+        env:
+          LAKEFLOW_RECORD_SNAPSHOT_DIR: ${{ github.workspace }}/frontend/public/snapshot
         run: |
           set -a; . ../.env; set +a
           mkdir -p test-results/screenshots
           npx playwright test
+      - name: Build the recorded demo site
+        if: github.event_name != 'pull_request'
+        working-directory: frontend
+        env:
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: |
+          cat > public/snapshot/meta.json <<EOF
+          {"sha": "${GITHUB_SHA}", "captured_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)", "run_url": "${CI_RUN_URL}",
+           "repo_url": "${REPO_URL}", "codespaces_url": "https://codespaces.new/${GITHUB_REPOSITORY}?quickstart=1"}
+          EOF
+          NEXT_PUBLIC_SNAPSHOT=1 NEXT_PUBLIC_BASE_PATH="/${GITHUB_REPOSITORY#*/}" npm run build
+          cp -r test-results/screenshots out/screenshots 2>/dev/null || true
+          touch out/.nojekyll
+      - name: Publish the recorded demo to gh-pages
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd frontend/out
+          git init -q -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Recorded demo from ${GITHUB_SHA::7} (${CI_RUN_URL})"
+          git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages
       - name: Upload screenshots and reports
         if: always()
         uses: actions/upload-artifact@v7

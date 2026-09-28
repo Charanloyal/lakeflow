@@ -6,6 +6,7 @@ with Spark. History before the API started is served from bronze through Trino.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import queue
@@ -40,10 +41,9 @@ class Broadcaster:
         with self._lock:
             subscribers = list(self._subscribers)
         for q in subscribers:
-            try:
+            # A slow client drops frames; the UI re-polls the REST endpoints.
+            with contextlib.suppress(queue.Full):
                 q.put_nowait((kind, payload))
-            except queue.Full:
-                pass  # slow client: drop, the UI re-polls REST endpoints
 
 
 class Tracer:

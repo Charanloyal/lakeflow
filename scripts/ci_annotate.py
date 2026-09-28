@@ -76,7 +76,7 @@ def compose(profile: str) -> None:
         service, state, health, code = item["Service"], item.get("State"), item.get("Health"), item.get("ExitCode")
         summary.append(f"{service}: {state} {health or ''} exit={code}")
         bad = (
-            state in ("exited", "dead", "restarting") and not (state == "exited" and code == 0) or health == "unhealthy"
+            state in ("exited", "dead","restarting") and not (state == "exited" and code == 0) or health == "unhealthy"
         )
         level = "error" if bad else "warning"
         if emitted[level] >= 9:

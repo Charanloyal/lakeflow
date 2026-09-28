@@ -1,3 +1,6 @@
+import * as fs from "node:fs";
+import * as path from "node:path";
+
 import { expect, test, type Page } from "@playwright/test";
 
 const ADMIN = {
@@ -9,6 +12,43 @@ const VIEWER = {
   password: process.env.LAKEFLOW_VIEWER_PASSWORD ?? "",
 };
 const SHOTS = process.env.LAKEFLOW_SCREENSHOT_DIR ?? "test-results/screenshots";
+// When set, every successful GET /api/* JSON response is saved: that is the data of the recorded demo site.
+const RECORD_DIR = process.env.LAKEFLOW_RECORD_SNAPSHOT_DIR;
+const recorded = new Map<string, unknown>();
+
+test.beforeEach(async ({ page }) => {
+  if (!RECORD_DIR) return;
+  page.on("response", async (response) => {
+    const url = new URL(response.url());
+    const json = (response.headers()["content-type"] ?? "").includes("application/json");
+    const wanted = url.pathname.startsWith("/api/") && response.request().method() === "GET";
+    if (!wanted || response.status() !== 200 || !json) return;
+    try {
+      const body = await response.json();
+      recorded.set(url.pathname + url.search, body);
+      recorded.set(url.pathname, body);
+    } catch {
+      // body no longer available (the page navigated away)
+    }
+  });
+});
+
+test.afterAll(() => {
+  if (!RECORD_DIR || recorded.size === 0) return;
+  fs.mkdirSync(RECORD_DIR, { recursive: true });
+  const manifest: Record<string, string> = {};
+  const files = new Map<unknown, string>();
+  for (const [key, body] of recorded) {
+    let file = files.get(body);
+    if (!file) {
+      file = `r${String(files.size).padStart(4, "0")}.json`;
+      files.set(body, file);
+      fs.writeFileSync(path.join(RECORD_DIR, file), JSON.stringify(body));
+    }
+    manifest[key] = file;
+  }
+  fs.writeFileSync(path.join(RECORD_DIR, "manifest.json"), JSON.stringify(manifest, null, 2));
+});
 
 async function login(page: Page, who = ADMIN) {
   await page.goto("/login/");

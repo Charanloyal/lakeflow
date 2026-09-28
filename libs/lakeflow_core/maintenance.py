@@ -116,7 +116,7 @@ def table_exists(query: Query, table: str) -> bool:
     qualified(table)
     schema, name = table.split(".")
     rows = query(
-        f"SELECT count(*) AS n FROM {CATALOG}.information_schema.tables WHERE table_schema = ? AND table_name = ?",
+        f"SELECT count(*) AS n FROM {CATALOG}.information_schema.tables WHERE table_schema = ? AND table_name = ?",  # noqa: S608
         [schema, name],
     )
     return bool(rows and rows[0]["n"])
@@ -237,7 +237,7 @@ def trino_query(host: str, port: int, user: str = "lakeflow-maintenance") -> Que
                 cursor.execute(sql)
             rows = cursor.fetchall()
             names = [d[0] for d in cursor.description or []]
-            return [dict(zip(names, row)) for row in rows] if names else []
+            return [dict(zip(names, row, strict=True)) for row in rows] if names else []
         finally:
             conn.close()
 

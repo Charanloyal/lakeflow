@@ -139,8 +139,6 @@ def cmd_bootstrap(args) -> None:
 
 def check_prerequisites(strict: bool = True) -> None:
     problems = []
-    if sys.version_info < (3, 10):
-        problems.append("Python >= 3.10 is required")
     if shutil.which("docker") is None:
         problems.append("Docker is not installed (https://docs.docker.com/get-docker/)")
     else:
@@ -261,7 +259,7 @@ def api_call(method: str, path: str, body: dict | None = None, timeout: float = 
     base = os.environ.get("LAKEFLOW_API_URL", "http://127.0.0.1:8000")
     token = base64.b64encode(f"{env['LAKEFLOW_ADMIN_USER']}:{env['LAKEFLOW_ADMIN_PASSWORD']}".encode()).decode()
     data = None if body is None else json.dumps(body).encode()
-    request = urllib.request.Request(
+    request = urllib.request.Request(  # noqa: S310 - local API URL from our own config
         base + path,
         data=data,
         method=method,
@@ -387,6 +385,8 @@ def cmd_benchmark(args) -> None:
             str(args.events),
             "--seed",
             str(args.seed),
+            "--resource-profile",
+            profile,
         )
     )
 

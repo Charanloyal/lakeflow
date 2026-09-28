@@ -1,0 +1,20 @@
+{
+  "name": "LakeFlow (full CDC stack)",
+  "image": "mcr.microsoft.com/devcontainers/python:1-3.12-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/node:1": { "version": "22" }
+  },
+  "hostRequirements": { "cpus": 4, "memory": "16gb", "storage": "32gb" },
+  "postCreateCommand": "python3 scripts/lakeflowctl.py --profile 8gb bootstrap --skip-docker",
+  "postStartCommand": "nohup python3 scripts/lakeflowctl.py --profile 8gb up --timeout 1500 > /tmp/lakeflow-up.log 2>&1 &",
+  "forwardPorts": [8080, 8000, 8088],
+  "portsAttributes": {
+    "8080": { "label": "LakeFlow UI (admin / local-only-admin)", "onAutoForward": "openBrowser" },
+    "8000": { "label": "Control-plane API (/api/docs)" },
+    "8088": { "label": "Trino UI" }
+  },
+  "customizations": {
+    "codespaces": { "openFiles": ["README.md"] }
+  }
+}

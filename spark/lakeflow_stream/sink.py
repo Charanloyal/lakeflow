@@ -307,7 +307,7 @@ def merge_silver_sql(ctx: SinkContext, name: str, view: str) -> str:
         *meta,
     ]
     return (
-        f"MERGE INTO {ctx.table(contract.target_table)} t USING {view} s ON t.{pk} = s.{pk} "
+        f"MERGE INTO {ctx.table(contract.target_table)} t USING {view} s ON t.{pk} = s.{pk} "  # noqa: S608
         f"WHEN MATCHED AND s._source_lsn > t._source_lsn AND s._source_op = 'd' THEN UPDATE SET {', '.join(delete_set)} "
         f"WHEN MATCHED AND s._source_lsn > t._source_lsn THEN UPDATE SET {', '.join(upsert_set)} "
         f"WHEN NOT MATCHED THEN INSERT ({', '.join(everything)}) VALUES ({', '.join('s.' + c for c in everything)})"
@@ -525,7 +525,9 @@ def process_batch(ctx: SinkContext, batch_df: DataFrame, batch_id: int) -> dict 
 
         has_replays = decoded.where(F.col("replay_of").isNotNull()).limit(1).count() > 0
         if s["dlq_rows"] or has_replays:
-            _dlq_rows(ctx, decoded, batch_id, committed_at).createOrReplaceTempView("lakeflow_dlq_src")
+            # Copy-on-write MERGE plans an exists() subquery that must be deterministic; the decoder UDF is not.
+            dlq_source = _dlq_rows(ctx, decoded, batch_id, committed_at).localCheckpoint()
+            dlq_source.createOrReplaceTempView("lakeflow_dlq_src")
             sql = DLQ_MERGE.format(table=ctx.table(T.DLQ_TABLE), view="lakeflow_dlq_src")
             retries += _with_retries(ctx, "dlq", lambda: ctx.spark.sql(sql))
             lap("dlq")

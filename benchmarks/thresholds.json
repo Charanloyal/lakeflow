@@ -1,0 +1,18 @@
+{
+  "ci": {
+    "max_loss_rate": 0,
+    "max_duplicate_rate": 0,
+    "max_error_rate": 0,
+    "max_reconciliation_mismatches": 0,
+    "max_p95_latency_ms": 60000,
+    "min_throughput_eps": 2
+  },
+  "laptop": {
+    "max_loss_rate": 0,
+    "max_duplicate_rate": 0,
+    "max_error_rate": 0,
+    "max_reconciliation_mismatches": 0,
+    "max_p95_latency_ms": 60000,
+    "min_throughput_eps": 5
+  }
+}
