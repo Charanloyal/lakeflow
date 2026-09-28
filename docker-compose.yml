@@ -196,7 +196,9 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-lakeflow}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?run make bootstrap}
       TRINO_PG_PASSWORD: ${TRINO_PG_PASSWORD:?run make bootstrap}
-    volumes: ["./platform/trino/catalog:/etc/trino/catalog:ro"]
+    volumes:
+      - ./platform/trino/catalog:/etc/trino/catalog:ro
+      - ./platform/trino/jvm.config:/etc/trino/jvm.config:ro
     ports: ["127.0.0.1:${TRINO_PORT:-8088}:8080"]
     depends_on:
       iceberg-rest: { condition: service_healthy }

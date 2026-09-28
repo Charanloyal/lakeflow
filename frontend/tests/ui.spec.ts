@@ -92,8 +92,10 @@ test("guided demo traces an order through every stage", async ({ page }) => {
   await page.getByTestId("guided-demo-start").click();
   await expect(page.getByTestId("stage-trino")).toContainText("done", { timeout: 180_000 });
   await page.screenshot({ path: `${SHOTS}/guided-demo-trace.png`, fullPage: true });
-  await expect(page.getByTestId("demo-step-verify")).toContainText("done", { timeout: 240_000 });
+  const verify = page.getByTestId("demo-step-verify").locator(".badge");
+  await expect(verify).toHaveText(/^(done|error)$/, { timeout: 480_000 });
   await expect(page.getByTestId("demo-log")).toContainText("tombstone visible in Trino");
+  await expect(verify).toHaveText("done");
 });
 
 test("event explorer opens a record-level trace", async ({ page }) => {
