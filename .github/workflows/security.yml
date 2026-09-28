@@ -19,9 +19,18 @@ jobs:
         with:
           fetch-depth: 0
       - name: gitleaks
-        run: >-
-          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/repo" zricethezav/gitleaks:v8.28.0
-          git /repo --redact --no-banner --log-opts="archive/v1-simulation..HEAD"
+        run: |
+          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/repo" zricethezav/gitleaks:v8.28.0 \
+            git /repo --redact --no-banner --log-opts="archive/v1-simulation..HEAD" \
+            --report-format json --report-path /repo/gitleaks.json || status=$?
+          python3 - <<'PY'
+          import json, os
+          findings = json.load(open("gitleaks.json")) if os.path.exists("gitleaks.json") else []
+          for f in findings:
+              print(f"::error file={f['File']},line={f['StartLine']}::gitleaks {f['RuleID']} in {f['Commit'][:7]}")
+          print(f"{len(findings)} findings")
+          PY
+          exit ${status:-0}
 
   dependencies:
     name: Dependency audit (pip-audit, npm audit)
@@ -37,7 +46,16 @@ jobs:
       - name: pip-audit (API + tooling)
         run: |
           pip install "pip-audit==$(grep -Po '(?<=^pip-audit==).*' requirements-dev.txt)"
-          pip-audit -r api/requirements.txt -r requirements-dev.txt --desc on --progress-spinner off
+          pip-audit -r api/requirements.txt -r requirements-dev.txt --progress-spinner off -f json -o pip-audit.json || status=$?
+          python3 - <<'PY'
+          import json
+          doc = json.load(open("pip-audit.json"))
+          for dep in doc.get("dependencies", []):
+              for vuln in dep.get("vulns", []):
+                  fixed = ", ".join(vuln.get("fix_versions", [])) or "none"
+                  print(f"::error title=pip-audit::{dep['name']}=={dep['version']} {vuln['id']} (fixed in {fixed})")
+          PY
+          exit ${status:-0}
       - name: npm audit (production dependencies)
         working-directory: frontend
         run: |

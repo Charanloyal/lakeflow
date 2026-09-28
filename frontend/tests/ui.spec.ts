@@ -86,6 +86,7 @@ test("keyboard users can skip to content and navigate", async ({ page }) => {
 });
 
 test("guided demo traces an order through every stage", async ({ page }) => {
+  test.setTimeout(600_000); // create, update, delete and verify each wait on the real pipeline
   await login(page);
   await page.getByLabel("include Spark crash/recovery").uncheck();
   await page.getByTestId("guided-demo-start").click();
