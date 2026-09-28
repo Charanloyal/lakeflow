@@ -50,7 +50,7 @@ validation and LSN-guarded MERGE. A backfill therefore restores missing or corru
 overwrite a newer change.
 
 ```bash
-make backfill CONTRACT=orders KEYS="0b6d2f4e-8c1a-4d3b-9e7f-5a6b7c8d9e0f"   # specific keys
+make backfill CONTRACT=orders KEYS="<order-uuid> <order-uuid>"   # specific keys
 python scripts/lakeflowctl.py backfill customers --updated-since 2026-09-25T00:00:00+00:00
 ```
 

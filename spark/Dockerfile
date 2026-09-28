@@ -39,7 +39,7 @@ ENTRYPOINT ["/opt/lakeflow/entrypoint.sh"]
 # PySpark tests against the exact runtime interpreter and jars (`make test`, CI).
 FROM runtime AS test
 USER root
-RUN pip3 install --no-cache-dir pytest==8.4.2
+RUN pip3 install --no-cache-dir pytest==9.0.3
 COPY spark/tests /opt/lakeflow/spark/tests
 USER spark
 WORKDIR /opt/lakeflow
