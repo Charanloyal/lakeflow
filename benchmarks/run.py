@@ -123,7 +123,7 @@ def mismatches(customer_id: str) -> int:
 def query_benchmark(runs: int) -> dict:
     def phase(name: str) -> dict:
         files = trino_rows(
-            'SELECT count_if(content = 0) AS data_files, count_if(content <> 0) AS delete_files '
+            "SELECT count_if(content = 0) AS data_files, count_if(content <> 0) AS delete_files "
             'FROM lakehouse.silver."orders$files"'
         )[0]
         samples, digest = [], None
@@ -146,8 +146,12 @@ def query_benchmark(runs: int) -> dict:
         return {"phase": name, **files, "result_sha256": digest, "runs": samples}
 
     before = phase("before_optimize")
-    record = maintain_table(trino_query(os.environ.get("LAKEFLOW_TRINO_HOST", "trino"), 8080), "silver.orders",
-                            tasks=["optimize"], runner="benchmark")
+    record = maintain_table(
+        trino_query(os.environ.get("LAKEFLOW_TRINO_HOST", "trino"), 8080),
+        "silver.orders",
+        tasks=["optimize"],
+        runner="benchmark",
+    )
     after = phase("after_optimize")
     return {
         "query_id": "silver_orders_revenue_by_currency_status",
@@ -160,10 +164,30 @@ def query_benchmark(runs: int) -> dict:
 
 
 def environment() -> dict:
-    cpu = next((line.split(":", 1)[1].strip() for line in Path("/proc/cpuinfo").read_text().splitlines()
-                if line.startswith("model name")), platform.processor()) if Path("/proc/cpuinfo").exists() else ""
-    mem = next((int(line.split()[1]) * 1024 for line in Path("/proc/meminfo").read_text().splitlines()
-                if line.startswith("MemTotal")), None) if Path("/proc/meminfo").exists() else None
+    cpu = (
+        next(
+            (
+                line.split(":", 1)[1].strip()
+                for line in Path("/proc/cpuinfo").read_text().splitlines()
+                if line.startswith("model name")
+            ),
+            platform.processor(),
+        )
+        if Path("/proc/cpuinfo").exists()
+        else ""
+    )
+    mem = (
+        next(
+            (
+                int(line.split()[1]) * 1024
+                for line in Path("/proc/meminfo").read_text().splitlines()
+                if line.startswith("MemTotal")
+            ),
+            None,
+        )
+        if Path("/proc/meminfo").exists()
+        else None
+    )
     return {
         "cpu_model": cpu,
         "cpu_count": os.cpu_count(),
@@ -242,7 +266,9 @@ def main() -> int:
                     "reconciliation_mismatches": mismatches(customer_id),
                     "first_source_ms": min((r["source_ms"] for r in unique.values()), default=started * 1000),
                     "last_commit_ms": max((r["commit_ms"] for r in unique.values()), default=time.time() * 1000),
-                    "payload_bytes_avg": round(sum(r["payload_bytes"] or 0 for r in unique.values()) / max(len(unique), 1)),
+                    "payload_bytes_avg": round(
+                        sum(r["payload_bytes"] or 0 for r in unique.values()) / max(len(unique), 1)
+                    ),
                     "latency_ms": sorted(round(r["commit_ms"] - r["source_ms"], 1) for r in unique.values()),
                 }
             )
@@ -255,8 +281,12 @@ def main() -> int:
         "git_sha": os.environ.get("GIT_SHA", "unknown"),
         "environment": environment(),
         "config": config(args.profile, args.resource_profile, args),
-        "workload": {"events_per_iteration": args.events, "iterations": args.iterations, "seed": args.seed,
-                     "mix": {"insert": 0.6, "update": 0.3, "delete": 0.1}},
+        "workload": {
+            "events_per_iteration": args.events,
+            "iterations": args.iterations,
+            "seed": args.seed,
+            "mix": {"insert": 0.6, "update": 0.3, "delete": 0.1},
+        },
         "iterations": iterations,
         "query_benchmarks": [query_benchmark(args.query_runs)],
     }
@@ -268,9 +298,20 @@ def main() -> int:
     summary = benchmark.summarize_result(doc)
     thresholds = json.loads((ROOT / "benchmarks" / "thresholds.json").read_text(encoding="utf-8")).get(args.profile, {})
     checks = benchmark.evaluate_thresholds(summary, thresholds) if thresholds else []
-    print(json.dumps({"file": str(path.relative_to(ROOT)), "latency_ms": summary["latency_ms"],
-                      "throughput_eps": summary["throughput_eps"], "loss_rate": summary["loss_rate"],
-                      "duplicate_rate": summary["duplicate_rate"], "checks": checks}, indent=1, default=str))
+    print(
+        json.dumps(
+            {
+                "file": str(path.relative_to(ROOT)),
+                "latency_ms": summary["latency_ms"],
+                "throughput_eps": summary["throughput_eps"],
+                "loss_rate": summary["loss_rate"],
+                "duplicate_rate": summary["duplicate_rate"],
+                "checks": checks,
+            },
+            indent=1,
+            default=str,
+        )
+    )
     return 1 if any(not c["passed"] for c in checks) else 0
 
 

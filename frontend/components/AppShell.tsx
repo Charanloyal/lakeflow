@@ -163,8 +163,8 @@ function Live({
     <Context.Provider value={value}>
       {SNAPSHOT ? (
         <div className="snapshot-banner" role="note" data-testid="snapshot-banner">
-          <strong>Recorded demo.</strong> Every value on these pages was captured from the real stack (PostgreSQL,
-          Debezium, Kafka, Spark, Iceberg, Trino) by the CI end-to-end run
+          <strong>Recorded demo.</strong> Every value on these pages was captured from the real stack
+          (PostgreSQL, Debezium, Kafka, Spark, Iceberg, Trino) by the CI end-to-end run
           {meta ? (
             <>
               {" "}
@@ -187,7 +187,11 @@ function Live({
         </span>
         <span className="spacer" />
         <Badge status={live}>
-          {live === "live" ? "Live stream connected" : live === "recorded" ? "Recorded (no live stream)" : `Live stream ${live}`}
+          {live === "live"
+            ? "Live stream connected"
+            : live === "recorded"
+              ? "Recorded (no live stream)"
+              : `Live stream ${live}`}
         </Badge>
         <span className="provenance">
           {identity.user} ({identity.role})
