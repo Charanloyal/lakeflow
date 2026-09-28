@@ -229,6 +229,10 @@ def test_09_contract_drift_dlq_then_promotion_and_replay():
             "SELECT status, replay_attempts FROM lakehouse.ops.dlq_events WHERE dlq_id = ?", [row["dlq_id"]]
         )[0]
         assert status["status"] == "replayed" and status["replay_attempts"] == 1
+        # Leave no live JPY row behind once v3 is rolled back (it would fail the critical currency_enum check).
+        with pg() as conn:
+            conn.execute("DELETE FROM shop.orders WHERE order_id = %s", (order_id,))
+        wait_visible(order_id, lambda r: r["is_deleted"])
     finally:
         (folder / "v3.schema.json").unlink(missing_ok=True)
         for path, text in backup.items():

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -10,6 +11,8 @@ from fastapi import HTTPException
 
 from lakeflow_core import benchmark, lineage
 from lakeflow_core.adr import load_adrs
+
+log = logging.getLogger("lakeflow.catalog")
 
 
 def _now() -> datetime:
@@ -40,6 +43,7 @@ def lineage_graph(ctx) -> dict:
                     if offsets is not None:
                         live[dataset["id"]] = {"records": sum(offsets.values()), "source": "Kafka end offsets"}
             except Exception:  # noqa: BLE001 - a dataset without data yet simply has no stats
+                log.debug("no live stats for %s", dataset["id"], exc_info=True)
                 continue
         return live
 

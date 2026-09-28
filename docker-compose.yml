@@ -312,6 +312,11 @@ services:
       AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY:?run make bootstrap}
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:${AIRFLOW_DB_PASSWORD}@postgres:5432/airflow
       AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "false"
+      AIRFLOW__WEBSERVER__WORKERS: "2"
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "false"
+      AIRFLOW__CORE__PARALLELISM: "4"
+      AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session
+      PYTHONPATH: /opt/lakeflow/libs
       _AIRFLOW_DB_MIGRATE: "true"
       _AIRFLOW_WWW_USER_CREATE: "true"
       _AIRFLOW_WWW_USER_USERNAME: ${AIRFLOW_ADMIN_USER:-admin}
@@ -325,6 +330,8 @@ services:
       LAKEFLOW_CONTRACTS_DIR: /opt/airflow/contracts
     volumes:
       - ./airflow/dags:/opt/airflow/dags:ro
+      - ./airflow/tests:/opt/airflow/tests:ro
+      - ./libs:/opt/lakeflow/libs:ro
       - ./contracts:/opt/airflow/contracts:ro
       - airflow-logs:/opt/airflow/logs
     ports: ["127.0.0.1:${AIRFLOW_PORT:-8089}:8080"]
@@ -362,6 +369,14 @@ services:
       LAKEFLOW_VIEWER_PASSWORD: ${LAKEFLOW_VIEWER_PASSWORD:?run make bootstrap}
       LAKEFLOW_SESSION_SECRET: ${LAKEFLOW_SESSION_SECRET:?run make bootstrap}
       LAKEFLOW_PII_HMAC_KEY: ${LAKEFLOW_PII_HMAC_KEY:?run make bootstrap}
+      LAKEFLOW_AIRFLOW_URL: http://airflow:8080
+      AIRFLOW_ADMIN_USER: ${AIRFLOW_ADMIN_USER:-admin}
+      AIRFLOW_ADMIN_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD:-}
+      LAKEFLOW_PROMETHEUS_URL: http://prometheus:9090
+      LAKEFLOW_GRAFANA_URL: http://grafana:3000
+      GRAFANA_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GRAFANA_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-}
+      LAKEFLOW_REQUIRE_PROFILES: ${LAKEFLOW_REQUIRE_PROFILES:-}
       GIT_SHA: ${GIT_SHA:-unknown}
       CI_RUN_URL: ${CI_RUN_URL:-}
     volumes:

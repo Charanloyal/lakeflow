@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 
 from .contracts import ContractRegistry
-from .tables import BRONZE_TABLE, CATALOG, DLQ_TABLE
+from .tables import BRONZE_TABLE, CATALOG, DLQ_TABLE, QUALITY_TABLE
 
 
 @dataclass(frozen=True)
@@ -173,8 +173,9 @@ def build_checks(
 
 
 def _source_expr(spec) -> str:
+    """PostgreSQL uuid/char(n)/text all compare as varchar against the lakehouse string columns."""
     column = f"s.{spec.name}"
-    return f"CAST({column} AS varchar)" if spec.fmt == "uuid" else column
+    return f"CAST({column} AS varchar)" if spec.logical_type == "string" else column
 
 
 def evaluate(check: QualityCheck, value: float | None, error: str | None = None) -> dict:
@@ -209,3 +210,22 @@ def run_checks(cursor, checks: list[QualityCheck]) -> list[dict]:
         except Exception as exc:  # noqa: BLE001 - report per-check errors
             results.append(evaluate(check, None, error=f"{type(exc).__name__}: {str(exc)[:300]}"))
     return results
+
+
+RESULTS_DDL = (
+    f"CREATE TABLE IF NOT EXISTS {CATALOG}.{QUALITY_TABLE} (run_id varchar, run_at timestamp(6) with time zone, "
+    "check_id varchar, dataset varchar, category varchar, severity varchar, status varchar, value double, "
+    "threshold double, unit varchar, error varchar, runner varchar) WITH (partitioning = ARRAY['day(run_at)'])"
+)
+_RESULT_FIELDS = ("check_id", "dataset", "category", "severity", "status", "value", "threshold", "unit", "error")
+
+
+def results_insert(run_id: str, run_at, runner: str, results: list[dict]) -> tuple[str, list]:
+    """One parameterised INSERT for a whole run (Trino `?` placeholders)."""
+    if not results:
+        raise ValueError("no results to insert")
+    row = "(" + ", ".join(["?"] * (len(_RESULT_FIELDS) + 3)) + ")"
+    params: list = []
+    for result in results:
+        params += [run_id, run_at, *(result[f] for f in _RESULT_FIELDS), runner]
+    return f"INSERT INTO {CATALOG}.{QUALITY_TABLE} VALUES {', '.join([row] * len(results))}", params  # noqa: S608

@@ -107,3 +107,103 @@ jobs:
       - name: Stop
         if: always()
         run: python3 scripts/lakeflowctl.py --profile 8gb down --volumes || true
+
+  observability-config:
+    name: Prometheus config + alert rule unit tests (promtool)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: promtool check config
+        run: >-
+          docker run --rm -v "$PWD/observability/prometheus:/etc/prometheus:ro" --entrypoint promtool
+          prom/prometheus:v2.55.1 check config /etc/prometheus/prometheus.yml
+      - name: promtool test rules
+        run: >-
+          docker run --rm -v "$PWD/observability/prometheus:/etc/prometheus:ro" -w /etc/prometheus/tests
+          --entrypoint promtool prom/prometheus:v2.55.1 test rules alerts_test.yml
+
+  frontend:
+    name: Frontend lint + typecheck + static build
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+      - name: Install
+        run: if [ -f package-lock.json ]; then npm ci --no-audit --no-fund; else npm install --no-audit --no-fund; fi
+      - name: Prettier
+        run: |
+          if ! npx prettier --check . > ../.prettier.txt 2>&1; then
+            cat ../.prettier.txt; python3 ../scripts/ci_annotate.py lines error "prettier --check" < ../.prettier.txt; exit 1
+          fi
+      - name: ESLint
+        run: |
+          if ! npx eslint . --format unix > ../.eslint.txt 2>&1; then
+            cat ../.eslint.txt; python3 ../scripts/ci_annotate.py lines error "eslint" < ../.eslint.txt; exit 1
+          fi
+      - name: Build (next build type-checks the app)
+        run: |
+          if ! npm run build > ../.build.txt 2>&1; then
+            cat ../.build.txt; python3 ../scripts/ci_annotate.py lines error "next build" < ../.build.txt; exit 1
+          fi
+
+  full-stack:
+    name: Full stack e2e, 16gb profile (API, UI, Airflow, Prometheus, Grafana)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      GIT_SHA: ${{ github.sha }}
+      CI_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      LAKEFLOW_REQUIRE_PROFILES: observability,maintenance
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+      - name: Bootstrap
+        run: python3 scripts/lakeflowctl.py --profile 16gb bootstrap --skip-docker
+      - name: Start the platform (core + API + UI + Airflow + Prometheus + Grafana) and wait for health
+        run: python3 scripts/lakeflowctl.py --profile 16gb up --timeout 1500
+      - name: Airflow DAG integrity (real image)
+        run: python3 scripts/lakeflowctl.py --profile 16gb check-dags
+      - name: API, Airflow and observability end-to-end scenarios
+        run: |
+          mkdir -p .artifacts
+          python3 scripts/lakeflowctl.py --profile 16gb integration-test tests/e2e --junitxml=.artifacts/e2e.xml -rA
+      - name: Install Playwright
+        working-directory: frontend
+        run: |
+          if [ -f package-lock.json ]; then npm ci --no-audit --no-fund; else npm install --no-audit --no-fund; fi
+          npx playwright install --with-deps chromium
+      - name: UI tests (Playwright against the running stack)
+        working-directory: frontend
+        run: |
+          set -a; . ../.env; set +a
+          mkdir -p test-results/screenshots
+          npx playwright test
+      - name: Upload screenshots and reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ui-evidence
+          path: |
+            frontend/test-results
+            frontend/playwright-report
+          if-no-files-found: ignore
+      - name: Annotate failures
+        if: failure()
+        run: |
+          python3 scripts/ci_annotate.py junit .artifacts/e2e.xml e2e
+          python3 scripts/ci_annotate.py junit frontend/test-results/junit.xml ui
+          python3 scripts/ci_annotate.py compose --profile 16gb
+      - name: Stop
+        if: always()
+        run: python3 scripts/lakeflowctl.py --profile 16gb down --volumes || true

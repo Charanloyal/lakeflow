@@ -1,0 +1,9 @@
+apiVersion: 1
+providers:
+  - name: lakeflow
+    folder: LakeFlow
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -11,13 +12,9 @@ from pathlib import Path
 from fastapi import HTTPException
 
 from lakeflow_core.contracts import check_backward_compatible, parse_contract
-from lakeflow_core.quality import build_checks, evaluate
+from lakeflow_core.quality import RESULTS_DDL, build_checks, evaluate, results_insert
 
-RESULTS_DDL = (
-    "CREATE TABLE IF NOT EXISTS lakehouse.ops.quality_results (run_id varchar, run_at timestamp(6) with time zone, "
-    "check_id varchar, dataset varchar, category varchar, severity varchar, status varchar, value double, "
-    "threshold double, unit varchar, error varchar, runner varchar) WITH (partitioning = ARRAY['day(run_at)'])"
-)
+log = logging.getLogger("lakeflow.quality")
 
 
 def _now() -> datetime:
@@ -44,27 +41,10 @@ def run(ctx, check_ids: list[str] | None, runner: str = "api") -> dict:
     persisted = False
     try:
         ctx.clients.trino(RESULTS_DDL)
-        placeholders = ", ".join(["(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"] * len(results))
-        params = []
-        for r in results:
-            params += [
-                run_id,
-                run_at,
-                r["check_id"],
-                r["dataset"],
-                r["category"],
-                r["severity"],
-                r["status"],
-                r["value"],
-                r["threshold"],
-                r["unit"],
-                r["error"],
-                runner,
-            ]
-        ctx.clients.trino(f"INSERT INTO lakehouse.ops.quality_results VALUES {placeholders}", params)  # noqa: S608
+        ctx.clients.trino(*results_insert(run_id, run_at, runner, results))
         persisted = True
     except Exception:  # noqa: BLE001 - results are still returned to the caller
-        persisted = False
+        log.exception("could not persist quality run %s", run_id)
     return {"results": results, "run_at": run_at, "source": "Trino (live queries)", "persisted": persisted}
 
 
@@ -183,7 +163,7 @@ def schema(ctx) -> dict:
             "FROM lakehouse.bronze.cdc_events CROSS JOIN UNNEST(drift_fields) AS t(field) GROUP BY 1, 2 ORDER BY 3 DESC"
         )
     except Exception:  # noqa: BLE001 - bronze appears after the first batch
-        pass
+        log.info("schema history unavailable (bronze not created yet?)", exc_info=True)
     return {
         "contracts": contracts,
         "observed_versions": observed,

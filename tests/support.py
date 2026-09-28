@@ -51,8 +51,9 @@ def trino_rows(sql: str, params=None) -> list[dict]:
             cursor.execute(sql, params)
         else:
             cursor.execute(sql)
-        names = [d[0] for d in cursor.description]
-        return [dict(zip(names, row)) for row in cursor.fetchall()]
+        rows = cursor.fetchall()  # also drives DML/DDL to completion
+        names = [d[0] for d in cursor.description or []]
+        return [dict(zip(names, row)) for row in rows] if names else []
     finally:
         conn.close()
 

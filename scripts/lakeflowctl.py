@@ -4,7 +4,10 @@
 python scripts/lakeflowctl.py bootstrap [--profile 8gb|16gb]
 python scripts/lakeflowctl.py up | down [--volumes] | status | doctor | logs <service>
 python scripts/lakeflowctl.py demo | test | integration-test | benchmark
+python scripts/lakeflowctl.py maintenance [--tables schema.table ...] | backfill <contract> [--keys uuid ...]
 python scripts/lakeflowctl.py migrate | contract promote <name> <version>
+
+Optional compose profiles (observability, maintenance) come from the resource profile, plus LAKEFLOW_EXTRA_PROFILES.
 """
 
 from __future__ import annotations
@@ -29,6 +32,7 @@ ENV_EXAMPLE = ROOT / ".env.example"
 CORE_SERVICES = ["postgres", "kafka", "connect", "minio", "iceberg-rest", "spark", "trino", "api", "web"]
 DATA_PLANE = ["postgres", "kafka", "connect", "minio", "iceberg-rest", "spark", "trino"]
 ONE_SHOT = ["kafka-init", "connect-init"]
+PROFILE_SERVICES = {"observability": ["prometheus", "grafana"], "maintenance": ["airflow"]}
 HINTS = {
     "postgres": "Check `logs postgres`; an init-script error needs `down --volumes` (init only runs on an empty volume).",
     "kafka": "Kafka needs ~600 MB; on the 8gb profile close other apps or raise Docker Desktop memory.",
@@ -41,6 +45,9 @@ HINTS = {
     "trino": "Trino needs ~1.2 GB; catalog errors usually mean MinIO credentials in .env do not match volumes.",
     "api": "The API needs the control database; `logs api` prints which dependency failed.",
     "web": "The web image serves the static UI and proxies /api to the api service.",
+    "airflow": "Airflow standalone needs ~1.5 GB and the airflow database; `logs airflow` shows migration errors.",
+    "prometheus": "Check observability/prometheus/*.yml syntax with `logs prometheus`.",
+    "grafana": "Grafana provisioning errors appear in `logs grafana`.",
 }
 
 
@@ -79,11 +86,17 @@ def profile_name(args=None) -> str:
     return chosen
 
 
+def enabled_profiles(profile: str) -> list[str]:
+    from_profile = read_env(ROOT / "infra" / "profiles" / f"{profile}.env").get("COMPOSE_PROFILES", "")
+    names = from_profile.split(",") + os.environ.get("LAKEFLOW_EXTRA_PROFILES", "").split(",")
+    return sorted({name.strip() for name in names if name.strip()})
+
+
 def compose(profile: str, *extra: str) -> list[str]:
     profile_file = ROOT / "infra" / "profiles" / f"{profile}.env"
     cmd = ["docker", "compose", "--env-file", str(ENV_FILE), "--env-file", str(profile_file)]
-    for name in filter(None, read_env(profile_file).get("COMPOSE_PROFILES", "").split(",")):
-        cmd += ["--profile", name.strip()]
+    for name in enabled_profiles(profile):
+        cmd += ["--profile", name]
     return cmd + list(extra)
 
 
@@ -202,7 +215,8 @@ def cmd_up(args) -> None:
     profile = profile_name(args)
     services = DATA_PLANE + ONE_SHOT if args.data_plane else []
     run(compose(profile, "up", "-d", "--build", *services))
-    wait_for(profile, DATA_PLANE if args.data_plane else CORE_SERVICES, args.timeout)
+    extras = [] if args.data_plane else [s for p in enabled_profiles(profile) for s in PROFILE_SERVICES.get(p, [])]
+    wait_for(profile, (DATA_PLANE if args.data_plane else CORE_SERVICES) + extras, args.timeout)
     env = read_env(ENV_FILE)
     print("\nLakeFlow is up (all ports bound to 127.0.0.1):")
     print(
@@ -210,9 +224,9 @@ def cmd_up(args) -> None:
     )
     print("  API docs       http://localhost:8000/api/docs")
     print("  Trino UI       http://localhost:8088      Spark UI http://localhost:4040")
-    if "observability" in " ".join(compose(profile)):
+    if "observability" in enabled_profiles(profile):
         print("  Grafana        http://localhost:3000      Prometheus http://localhost:9090")
-    if "maintenance" in " ".join(compose(profile)):
+    if "maintenance" in enabled_profiles(profile):
         print("  Airflow        http://localhost:8089")
 
 
@@ -236,7 +250,8 @@ def cmd_doctor(args) -> None:
         return
     profile = profile_name(args)
     states = service_states(profile)
-    for name in CORE_SERVICES + ONE_SHOT:
+    extras = [s for p in enabled_profiles(profile) for s in PROFILE_SERVICES.get(p, [])]
+    for name in CORE_SERVICES + extras + ONE_SHOT:
         state = states.get(name, {})
         print(f"  {name:14} {state.get('State', 'absent'):10} {state.get('Health', '') or ''}")
 
@@ -325,6 +340,26 @@ def cmd_test(args) -> None:
         run(compose(profile, "--profile", "tools", "run", "--rm", "--no-deps", "tools", "pytest", "-q", "api/tests"))
         print("Spark tests (container) ...")
         run(compose(profile, "--profile", "tools", "run", "--rm", "--no-deps", "spark-tests"))
+        cmd_check_dags(args)
+
+
+def cmd_check_dags(args) -> None:
+    """Parse the DAGs with the real Airflow image (no database or running stack needed)."""
+    print("Airflow DAG integrity (container) ...")
+    run(
+        compose(
+            profile_name(args),
+            "--profile",
+            "maintenance",
+            "run",
+            "--rm",
+            "--no-deps",
+            "--entrypoint",
+            "python",
+            "airflow",
+            "/opt/airflow/tests/check_dags.py",
+        )
+    )
 
 
 def cmd_integration_test(args) -> None:
@@ -354,6 +389,22 @@ def cmd_benchmark(args) -> None:
             str(args.seed),
         )
     )
+
+
+def cmd_maintenance(args) -> None:
+    tables = ["--tables", *args.tables] if args.tables else []
+    run(tools_cmd(profile_name(args), "python", "-m", "lakeflow_core.maintenance", "--runner", "cli", *tables))
+
+
+def cmd_backfill(args) -> None:
+    extra = ["--keys", *args.keys] if args.keys else []
+    if args.updated_since:
+        extra += ["--updated-since", args.updated_since]
+    run(tools_cmd(profile_name(args), "python", "-m", "lakeflow_core.backfill", args.contract, *extra))
+
+
+def tools_cmd(profile: str, *command: str) -> list[str]:
+    return compose(profile, "--profile", "tools", "run", "--rm", "tools", *command)
 
 
 def cmd_migrate(args) -> None:
@@ -431,6 +482,7 @@ def main() -> None:
     p = sub.add_parser("test")
     p.add_argument("--unit-only", action="store_true")
     p.set_defaults(func=cmd_test)
+    sub.add_parser("check-dags", help="Airflow DAG integrity in the real image").set_defaults(func=cmd_check_dags)
     p = sub.add_parser("integration-test")
     p.add_argument("paths", nargs="*", default=["tests/integration", "tests/e2e"])
     p.set_defaults(func=cmd_integration_test)
@@ -441,6 +493,14 @@ def main() -> None:
     p.add_argument("--seed", type=int, default=42)
     p.set_defaults(func=cmd_benchmark)
     sub.add_parser("migrate").set_defaults(func=cmd_migrate)
+    p = sub.add_parser("maintenance", help="compact, expire snapshots and remove orphan files via Trino")
+    p.add_argument("--tables", nargs="*")
+    p.set_defaults(func=cmd_maintenance)
+    p = sub.add_parser("backfill", help="request a Debezium incremental snapshot")
+    p.add_argument("contract", choices=["orders", "customers"])
+    p.add_argument("--keys", nargs="*")
+    p.add_argument("--updated-since")
+    p.set_defaults(func=cmd_backfill)
     p = sub.add_parser("contract")
     p.add_argument("action")
     p.add_argument("name")

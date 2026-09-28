@@ -1,0 +1,100 @@
+import { expect, test, type Page } from "@playwright/test";
+
+const ADMIN = { user: process.env.LAKEFLOW_ADMIN_USER ?? "admin", password: process.env.LAKEFLOW_ADMIN_PASSWORD ?? "" };
+const VIEWER = { user: process.env.LAKEFLOW_VIEWER_USER ?? "viewer", password: process.env.LAKEFLOW_VIEWER_PASSWORD ?? "" };
+const SHOTS = process.env.LAKEFLOW_SCREENSHOT_DIR ?? "test-results/screenshots";
+
+async function login(page: Page, who = ADMIN) {
+  await page.goto("/login/");
+  await page.getByLabel("Username").fill(who.user);
+  await page.getByLabel("Password").fill(who.password);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+}
+
+test("unauthenticated users are sent to the login page", async ({ page }) => {
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/login\/?$/);
+  await expect(page.getByRole("heading", { name: "LakeFlow control plane" })).toBeVisible();
+});
+
+test("overview metrics carry a timestamp and a source", async ({ page }) => {
+  await login(page);
+  const card = page.getByTestId("metric-consumer_lag");
+  await expect(card).toBeVisible();
+  await expect(card).toContainText("as of");
+  await expect(card).toContainText("Spark checkpoint");
+  await expect(page.getByText("Local demo environment")).toBeVisible();
+  await page.screenshot({ path: `${SHOTS}/overview.png`, fullPage: true });
+});
+
+test("keyboard users can skip to content and navigate", async ({ page }) => {
+  await login(page);
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("link", { name: "Skip to content" })).toBeFocused();
+  await page.getByRole("link", { name: "Event Explorer" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("heading", { name: "Event explorer" })).toBeVisible();
+});
+
+test("guided demo traces an order through every stage", async ({ page }) => {
+  await login(page);
+  await page.getByLabel("include Spark crash/recovery").uncheck();
+  await page.getByTestId("guided-demo-start").click();
+  await expect(page.getByTestId("stage-trino")).toContainText("done", { timeout: 180_000 });
+  await page.screenshot({ path: `${SHOTS}/guided-demo-trace.png`, fullPage: true });
+  await expect(page.getByTestId("demo-step-verify")).toContainText("done", { timeout: 240_000 });
+  await expect(page.getByTestId("demo-log")).toContainText("tombstone visible in Trino");
+});
+
+test("event explorer opens a record-level trace", async ({ page }) => {
+  await login(page);
+  await page.getByRole("link", { name: "Event Explorer" }).click();
+  const trace = page.getByRole("button", { name: /^Trace / }).first();
+  await expect(trace).toBeVisible({ timeout: 60_000 });
+  await trace.click();
+  await expect(page.getByTestId("stage-kafka")).toContainText("done");
+  await expect(page.getByText("Final state (Trino) vs source (PostgreSQL)")).toBeVisible();
+  await page.screenshot({ path: `${SHOTS}/event-trace.png`, fullPage: true });
+});
+
+test("live pipeline shows every stage with status", async ({ page }) => {
+  await login(page);
+  await page.getByRole("link", { name: "Live Pipeline" }).click();
+  for (const node of ["postgres", "debezium", "kafka", "spark", "iceberg", "trino"]) {
+    await expect(page.getByTestId(`node-${node}`)).toBeVisible();
+  }
+  await page.screenshot({ path: `${SHOTS}/pipeline.png`, fullPage: true });
+});
+
+test("screenshots of the remaining pages", async ({ page }) => {
+  await login(page);
+  for (const [name, heading] of [
+    ["quality", "Data quality"],
+    ["lineage", "Lineage"],
+    ["benchmarks", "Benchmarks"],
+    ["recovery", "Recovery lab"],
+    ["architecture", "Architecture and decisions"],
+  ]) {
+    await page.goto(`/${name}/`);
+    await expect(page.getByRole("heading", { name: heading, exact: true })).toBeVisible();
+    await page.screenshot({ path: `${SHOTS}/${name}.png`, fullPage: true });
+  }
+});
+
+test("dependency outage renders an explicit error state", async ({ page }) => {
+  await login(page);
+  await page.route("**/api/metrics/overview", (route) =>
+    route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ detail: "Trino unavailable: test" }) }),
+  );
+  await page.reload();
+  await expect(page.getByText("Dependency unavailable: Trino unavailable: test")).toBeVisible();
+});
+
+test("viewer role cannot run recovery actions", async ({ page }) => {
+  await login(page, VIEWER);
+  await page.getByRole("link", { name: "Recovery Lab" }).click();
+  await expect(page.getByTestId("action-crash_now")).toBeDisabled();
+});

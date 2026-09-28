@@ -347,7 +347,10 @@ def _bronze_rows(ctx: SinkContext, planned: DataFrame, batch_id: int, committed_
 
 def _dlq_rows(ctx: SinkContext, decoded: DataFrame, batch_id: int, seen_at: datetime) -> DataFrame:
     position = F.format_string("%05d:%020d", F.col("kafka_partition"), F.col("kafka_offset"))
-    coordinates_id = F.sha2(F.concat_ws("|", "kafka_topic", "kafka_partition", "kafka_offset"), 256)
+    coordinates_id = F.sha2(
+        F.concat_ws("|", F.col("kafka_topic"), F.col("kafka_partition").cast("string"), F.col("kafka_offset").cast("string")),
+        256,
+    )
     common = [
         F.col("kafka_topic"),
         F.col("kafka_partition"),
@@ -412,6 +415,9 @@ BATCH_MERGE = (
 
 def process_batch(ctx: SinkContext, batch_df: DataFrame, batch_id: int) -> dict | None:
     """foreachBatch entry point. Returns the batch record (None for empty batches)."""
+    # foreachBatch hands over a DataFrame bound to a *cloned* session: temp views registered from it are only
+    # visible there, so every statement of this batch must run in that session.
+    ctx.spark = batch_df.sparkSession
     started = ctx.clock()
     stage_ms: dict[str, int] = {}
     mark = [started]

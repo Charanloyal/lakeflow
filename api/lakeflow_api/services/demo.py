@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import random
 import time
 import uuid
@@ -11,6 +12,7 @@ from decimal import Decimal
 import psycopg
 from fastapi import HTTPException
 
+log = logging.getLogger("lakeflow.demo")
 TXID_SQL = "SELECT (pg_current_xact_id()::text::bigint & 4294967295) AS txid"
 UPDATABLE = ("status", "amount", "currency", "channel")
 
@@ -51,7 +53,7 @@ def _finish(ctx, conn, actor, order_id, op, txid, detail):
     try:
         ctx.store.record_mutation(actor, "orders", str(order_id), op, txid, lsn, detail)
     except Exception:  # noqa: BLE001 - the trace still works from Kafka/bronze evidence
-        pass
+        log.warning("could not record mutation %s %s in the control DB", op, order_id, exc_info=True)
     return _result(
         order_id,
         op,
@@ -161,8 +163,8 @@ def generate(ctx, count: int, seed: int, actor: str) -> dict:
                     counts["d"] += 1
     try:
         ctx.store.audit(actor, "demo.generate", {"count": count, "seed": seed, **counts})
-    except Exception:  # noqa: BLE001
-        pass
+    except Exception:  # noqa: BLE001 - auditing is best effort; the mutations are committed
+        log.warning("could not audit demo.generate", exc_info=True)
     return {
         "seed": seed,
         "inserted": counts["c"],

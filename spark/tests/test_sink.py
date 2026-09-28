@@ -46,6 +46,18 @@ def test_insert_update_delete_round_trip(ctx, spark):
     assert json.loads(batch_record(spark, 1)["snapshot_ids"])["silver.orders"]
 
 
+def test_batch_from_a_cloned_session_like_foreach_batch(ctx, spark):
+    """foreachBatch passes DataFrames of a cloned session whose temp views are invisible to the driver session."""
+    cloned = spark.newSession()
+    b = Batch(cloned)
+    b.change("c", A, 100, order(A))
+    b.add(b"{not json", key=b'{"order_id": "x"}')
+    record = process_batch(ctx, b.df(), 0)
+    assert (record["applied"], record["dlq_rows"]) == (1, 1)
+    assert A in silver(spark)
+    assert spark.sql("SELECT count(*) AS n FROM lakehouse.ops.dlq_events").first()["n"] == 1
+
+
 def test_duplicates_are_stored_once(ctx, spark):
     b = Batch(spark)
     value = envelope("c", 100, after=order(A))

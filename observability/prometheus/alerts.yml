@@ -1,0 +1,85 @@
+# Alert rules. Thresholds mirror the data contracts (orders freshness p95 SLA = 60 s) and ADR-0003.
+# Unit-tested with `promtool test rules observability/prometheus/tests/alerts_test.yml` in CI.
+groups:
+  - name: lakeflow-pipeline
+    rules:
+      - alert: LakeFlowStreamDown
+        expr: up{job="spark-stream"} == 0 or lakeflow_stream_query_active == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: Spark streaming query is not running
+          runbook: docs/runbooks/stream-recovery.md
+
+      - alert: LakeFlowComponentDown
+        expr: lakeflow_component_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.component }} health probe is failing"
+          runbook: docs/troubleshooting.md
+
+      - alert: LakeFlowStreamStalled
+        expr: (time() - lakeflow_stream_last_batch_timestamp_seconds > 300) and on() (sum(lakeflow_consumer_lag_messages) > 0)
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Kafka has unprocessed CDC events but no micro-batch committed for 5 minutes
+          runbook: docs/runbooks/stream-recovery.md
+
+      - alert: LakeFlowConsumerLagHigh
+        expr: sum(lakeflow_consumer_lag_messages) > 5000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Spark is {{ $value }} CDC events behind Kafka"
+          runbook: docs/runbooks/stream-recovery.md
+
+      - alert: LakeFlowFreshnessSlaBreached
+        expr: lakeflow_stream_freshness_p95_seconds > 60
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "p95 freshness {{ $value }}s exceeds the 60s orders contract SLA"
+          runbook: docs/runbooks/stream-recovery.md
+
+      - alert: LakeFlowDlqReceivingRecords
+        expr: sum(increase(lakeflow_stream_events_total{outcome="dlq"}[15m])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: Records were rejected into ops.dlq_events in the last 15 minutes
+          runbook: docs/runbooks/dlq-replay.md
+
+      - alert: LakeFlowCommitConflictsHigh
+        expr: sum(increase(lakeflow_stream_commit_retries_total[15m])) > 10
+        labels:
+          severity: warning
+        annotations:
+          summary: Frequent Iceberg commit conflicts (concurrent maintenance or a second writer?)
+          runbook: docs/runbooks/maintenance.md
+
+  - name: lakeflow-source
+    rules:
+      - alert: LakeFlowReplicationSlotLagHigh
+        expr: lakeflow_replication_slot_lag_bytes > 268435456
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: The Debezium replication slot retains more than 256 MiB of WAL
+          runbook: docs/runbooks/stream-recovery.md
+
+      - alert: LakeFlowDebeziumHeartbeatStale
+        expr: lakeflow_debezium_heartbeat_age_seconds > 60
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "No Debezium heartbeat for {{ $value }}s (connector stopped or slot inactive)"
+          runbook: docs/runbooks/stream-recovery.md

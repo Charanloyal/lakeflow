@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: autofix-${{ github.ref }}
@@ -40,12 +41,16 @@ jobs:
           npm install --package-lock-only --no-audit --no-fund
           npm ci --no-audit --no-fund
           npx prettier --write .
-      - name: Commit changes
+      - name: Commit changes and re-run CI on the formatted head
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           if [ -n "$(git status --porcelain)" ]; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add -A
-            git commit -m "style: automated formatting and lockfile [skip ci]"
+            git commit -m "style: automated formatting and lockfile"
             git push
+            # Pushes made with GITHUB_TOKEN do not start workflows; dispatch CI so the branch head is always tested.
+            gh workflow run ci.yml --ref "${GITHUB_REF_NAME}"
           fi

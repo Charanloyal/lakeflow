@@ -3,7 +3,7 @@ CTL = $(PY) scripts/lakeflowctl.py
 PROFILE ?=
 PROFILE_ARG = $(if $(PROFILE),--profile $(PROFILE),)
 
-.PHONY: help bootstrap up down clean demo test integration-test benchmark status doctor logs migrate lint
+.PHONY: help bootstrap up down clean demo test integration-test benchmark status doctor logs migrate lint maintenance backfill
 
 help: ## List targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-18s %s\n", $$1, $$2}'
@@ -43,6 +43,12 @@ logs: ## Tail logs (SERVICE=spark)
 
 migrate: ## Apply source schema migrations (contract v2 channel column)
 	$(CTL) $(PROFILE_ARG) migrate
+
+maintenance: ## Compact, expire snapshots and remove orphan files now (same code as the Airflow DAG)
+	$(CTL) $(PROFILE_ARG) maintenance
+
+backfill: ## Debezium incremental snapshot: make backfill CONTRACT=orders [KEYS="uuid ..."]
+	$(CTL) $(PROFILE_ARG) backfill $(or $(CONTRACT),orders) $(if $(KEYS),--keys $(KEYS),)
 
 lint: ## Python lint and format check
 	ruff check . && ruff format --check .

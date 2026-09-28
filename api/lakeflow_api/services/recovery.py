@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import time
 import uuid
@@ -11,6 +12,7 @@ from pathlib import Path
 
 from fastapi import HTTPException
 
+log = logging.getLogger("lakeflow.recovery")
 ORDERS_TOPIC = "lakeflow.shop.orders"
 
 
@@ -182,8 +184,8 @@ def run(ctx, body, actor: str) -> dict:
             json.dumps(record["detail"], default=str),
             f"Recovery Lab ({actor})",
         )
-    except Exception:  # noqa: BLE001 - the action already happened; auditing failure is logged by the store
-        pass
+    except Exception:  # noqa: BLE001 - the action already happened; auditing is best effort
+        log.warning("could not audit recovery action %s", action_id, exc_info=True)
     return record
 
 
@@ -201,8 +203,8 @@ def history(ctx) -> dict:
                     "detail": row["detail"],
                 }
             )
-    except Exception:  # noqa: BLE001
-        pass
+    except Exception:  # noqa: BLE001 - control DB down: still show acks from the shared volume
+        log.warning("could not read recovery audit log", exc_info=True)
     acks = []
     ack_dir = Path(ctx.settings.control_dir) / "acks"
     if ack_dir.is_dir():

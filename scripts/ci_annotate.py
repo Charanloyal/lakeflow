@@ -23,7 +23,9 @@ def escape(text: str) -> str:
 
 
 def emit(level: str, title: str, message: str) -> None:
-    print(f"::{level} title={escape(title)[:120]}::{escape(message[-MAX_LEN:])}")
+    if len(message) > MAX_LEN:
+        message = message[:1800] + "\n[...]\n" + message[-(MAX_LEN - 1800):]
+    print(f"::{level} title={escape(title)[:120]}::{escape(message)}")
 
 
 def junit(path: str, prefix: str = "test") -> None:
@@ -37,7 +39,10 @@ def junit(path: str, prefix: str = "test") -> None:
             node = case.find(tag)
             if node is not None and count < 10:
                 name = f"{case.get('classname', '')}.{case.get('name', '')}"
-                emit("error", f"{prefix} {tag}: {name}", f"{node.get('message', '')}\n{node.text or ''}")
+                text = node.text or ""
+                errors = [line for line in text.splitlines() if line.startswith("E ")][:25]
+                emit("error", f"{prefix} {tag}: {name}",
+                     f"{node.get('message', '')[:1200]}\n--- E lines ---\n" + "\n".join(errors) + f"\n--- tail ---\n{text[-1200:]}")
                 count += 1
     suites = list(root.iter("testsuite")) or [root]
     total = sum(int(s.get("tests", 0)) for s in suites)
@@ -52,7 +57,12 @@ def lines(level: str, title: str) -> None:
 
 
 def compose(profile: str) -> None:
-    base = ["docker", "compose", "--env-file", ".env", "--env-file", f"infra/profiles/{profile}.env"]
+    profile_file = ROOT / "infra" / "profiles" / f"{profile}.env"
+    base = ["docker", "compose", "--env-file", ".env", "--env-file", str(profile_file)]
+    for line in profile_file.read_text(encoding="utf-8").splitlines():
+        if line.startswith("COMPOSE_PROFILES="):
+            for name in filter(None, line.split("=", 1)[1].strip().split(",")):
+                base += ["--profile", name.strip()]
     out = subprocess.run(base + ["ps", "--all", "--format", "json"], cwd=ROOT, capture_output=True, text=True).stdout
     items = json.loads(out) if out.strip().startswith("[") else [json.loads(x) for x in out.splitlines() if x.strip()]
     emitted = {"error": 0, "warning": 0}

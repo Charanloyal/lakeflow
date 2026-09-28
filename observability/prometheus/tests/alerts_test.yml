@@ -1,0 +1,76 @@
+# promtool unit tests for alerts.yml (run in CI).
+rule_files:
+  - ../alerts.yml
+
+evaluation_interval: 1m
+
+tests:
+  - name: stream down fires after one minute, not before
+    interval: 1m
+    input_series:
+      - series: 'up{job="spark-stream", instance="spark:9108"}'
+        values: "1 0 0 0"
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: LakeFlowStreamDown
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: LakeFlowStreamDown
+        exp_alerts:
+          - exp_labels: { severity: critical, job: spark-stream, instance: "spark:9108" }
+            exp_annotations:
+              summary: Spark streaming query is not running
+              runbook: docs/runbooks/stream-recovery.md
+
+  - name: stalled only when there is lag
+    interval: 1m
+    input_series:
+      - series: "lakeflow_stream_last_batch_timestamp_seconds"
+        values: "0x10"
+      - series: 'lakeflow_consumer_lag_messages{topic="lakeflow.shop.orders"}'
+        values: "0 0 0 0 0 0 0 25 25 25 25"
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: LakeFlowStreamStalled
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: LakeFlowStreamStalled
+        exp_alerts:
+          - exp_labels: { severity: critical }
+            exp_annotations:
+              summary: Kafka has unprocessed CDC events but no micro-batch committed for 5 minutes
+              runbook: docs/runbooks/stream-recovery.md
+
+  - name: freshness SLA uses the contract threshold
+    interval: 1m
+    input_series:
+      - series: "lakeflow_stream_freshness_p95_seconds"
+        values: "12 12 75 75 75 75 75 75 75"
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: LakeFlowFreshnessSlaBreached
+        exp_alerts: []
+      - eval_time: 8m
+        alertname: LakeFlowFreshnessSlaBreached
+        exp_alerts:
+          - exp_labels: { severity: warning }
+            exp_annotations:
+              summary: "p95 freshness 75s exceeds the 60s orders contract SLA"
+              runbook: docs/runbooks/stream-recovery.md
+
+  - name: dlq alert follows rejected records
+    interval: 1m
+    input_series:
+      - series: 'lakeflow_stream_events_total{table="*", outcome="dlq"}'
+        values: "0 0 0 3 3"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: LakeFlowDlqReceivingRecords
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: LakeFlowDlqReceivingRecords
+        exp_alerts:
+          - exp_labels: { severity: warning }
+            exp_annotations:
+              summary: Records were rejected into ops.dlq_events in the last 15 minutes
+              runbook: docs/runbooks/dlq-replay.md

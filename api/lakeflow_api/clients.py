@@ -58,7 +58,7 @@ class Clients:
         finally:
             conn.close()
         elapsed = (time.perf_counter() - started) * 1000
-        return [{n: _plain(v) for n, v in zip(names, row)} for row in rows], elapsed
+        return [{n: _plain(v) for n, v in zip(names, row, strict=True)} for row in rows], elapsed
 
     # ------------------------------------------------------------------------------------- Kafka Connect
     def connector_status(self) -> dict:
