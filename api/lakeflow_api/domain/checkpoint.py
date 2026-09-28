@@ -51,7 +51,9 @@ def read_checkpoint(root: str | Path) -> CheckpointState:
     commit_ids = _batch_ids(query / "commits")
     latest_offsets = offsets_ids[-1] if offsets_ids else None
     latest_commit = commit_ids[-1] if commit_ids else None
-    planned = parse_offsets_file((query / "offsets" / str(latest_offsets)).read_text()) if latest_offsets is not None else {}
+    planned = (
+        parse_offsets_file((query / "offsets" / str(latest_offsets)).read_text()) if latest_offsets is not None else {}
+    )
     committed = (
         parse_offsets_file((query / "offsets" / str(latest_commit)).read_text())
         if latest_commit is not None and (query / "offsets" / str(latest_commit)).exists()

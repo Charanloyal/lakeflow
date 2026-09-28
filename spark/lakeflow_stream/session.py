@@ -35,7 +35,9 @@ def build_session(settings: Settings) -> SparkSession:
     return builder.getOrCreate()
 
 
-def build_local_test_session(warehouse_dir: str, catalog: str = "lakehouse", packages: str | None = None) -> SparkSession:
+def build_local_test_session(
+    warehouse_dir: str, catalog: str = "lakehouse", packages: str | None = None
+) -> SparkSession:
     """Local Hadoop-catalog session for PySpark tests (no Kafka/MinIO needed)."""
     builder = SparkSession.builder.master("local[2]").appName("lakeflow-tests")
     conf = {

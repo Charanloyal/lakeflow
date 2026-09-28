@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import HTTPException
+
 from lakeflow_core.contracts import check_backward_compatible, parse_contract
 from lakeflow_core.quality import build_checks, evaluate
 
@@ -46,8 +47,20 @@ def run(ctx, check_ids: list[str] | None, runner: str = "api") -> dict:
         placeholders = ", ".join(["(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"] * len(results))
         params = []
         for r in results:
-            params += [run_id, run_at, r["check_id"], r["dataset"], r["category"], r["severity"], r["status"],
-                       r["value"], r["threshold"], r["unit"], r["error"], runner]
+            params += [
+                run_id,
+                run_at,
+                r["check_id"],
+                r["dataset"],
+                r["category"],
+                r["severity"],
+                r["status"],
+                r["value"],
+                r["threshold"],
+                r["unit"],
+                r["error"],
+                runner,
+            ]
         ctx.clients.trino(f"INSERT INTO lakehouse.ops.quality_results VALUES {placeholders}", params)  # noqa: S608
         persisted = True
     except Exception:  # noqa: BLE001 - results are still returned to the caller
@@ -71,7 +84,12 @@ def summary(ctx) -> dict:
         dlq_open = dlq_rows[0]["n"]
     except Exception:  # noqa: BLE001
         dlq_open = None
-    return {"results": results, "dlq_open": dlq_open, "as_of": _now(), "source": "Trino: ops.quality_results (latest per check)"}
+    return {
+        "results": results,
+        "dlq_open": dlq_open,
+        "as_of": _now(),
+        "source": "Trino: ops.quality_results (latest per check)",
+    }
 
 
 def rejected(ctx, status: str | None, limit: int) -> dict:
@@ -105,8 +123,11 @@ def replay(ctx, dlq_ids: list[str], actor: str) -> dict:
     )
     replayed = []
     for row in rows:
-        headers = {"lakeflow-replay-of": row["dlq_id"], "lakeflow-original-topic": row["source_topic"],
-                   "lakeflow-replay-requested-by": actor}
+        headers = {
+            "lakeflow-replay-of": row["dlq_id"],
+            "lakeflow-original-topic": row["source_topic"],
+            "lakeflow-replay-requested-by": actor,
+        }
         ctx.clients.produce(ctx.settings.replay_topic, _raw(row["raw_key"]), _raw(row["raw_value"]), headers)
         replayed.append(row["dlq_id"])
     ctx.store.audit(actor, "quality.dlq_replay", {"replayed": replayed})
@@ -115,12 +136,25 @@ def replay(ctx, dlq_ids: list[str], actor: str) -> dict:
 
 def _describe(contract, status: str, problems: list[str]) -> dict:
     return {
-        "contract": contract.name, "version": contract.version, "status": status, "owner": contract.owner,
-        "classification": contract.classification, "compatibility": contract.compatibility,
-        "freshness_sla": contract.freshness_sla, "required": list(contract.required),
-        "fields": [{"name": f.name, "type": f.logical_type, "nullable": f.nullable, "pii": f.pii,
-                    "pii_handling": f.pii_handling, "enum": list(f.enum) if f.enum else None}
-                   for f in contract.fields.values()],
+        "contract": contract.name,
+        "version": contract.version,
+        "status": status,
+        "owner": contract.owner,
+        "classification": contract.classification,
+        "compatibility": contract.compatibility,
+        "freshness_sla": contract.freshness_sla,
+        "required": list(contract.required),
+        "fields": [
+            {
+                "name": f.name,
+                "type": f.logical_type,
+                "nullable": f.nullable,
+                "pii": f.pii,
+                "pii_handling": f.pii_handling,
+                "enum": list(f.enum) if f.enum else None,
+            }
+            for f in contract.fields.values()
+        ],
         "compatibility_problems": problems,
     }
 
@@ -135,7 +169,9 @@ def schema(ctx) -> dict:
             contracts.append(_describe(contract, contract.status, problems))
         for path in sorted(Path(ctx.settings.contracts_dir, name, "proposed").glob("v*.schema.json")):
             proposed = parse_contract(json.loads(path.read_text(encoding="utf-8")))
-            contracts.append(_describe(proposed, "proposed", check_backward_compatible(registry.current(name), proposed)))
+            contracts.append(
+                _describe(proposed, "proposed", check_backward_compatible(registry.current(name), proposed))
+            )
     observed, drift = [], []
     try:
         observed, _ = ctx.clients.trino(
@@ -148,8 +184,13 @@ def schema(ctx) -> dict:
         )
     except Exception:  # noqa: BLE001 - bronze appears after the first batch
         pass
-    return {"contracts": contracts, "observed_versions": observed, "drift": drift, "as_of": _now(),
-            "source": "contracts/ + Trino: bronze.cdc_events"}
+    return {
+        "contracts": contracts,
+        "observed_versions": observed,
+        "drift": drift,
+        "as_of": _now(),
+        "source": "contracts/ + Trino: bronze.cdc_events",
+    }
 
 
 def freshness(ctx, minutes: int) -> dict:

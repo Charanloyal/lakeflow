@@ -23,7 +23,16 @@ def percentile(values: Iterable[float], q: float) -> float | None:
 def summarize(values: Iterable[float]) -> dict[str, float | int | None]:
     data = [float(v) for v in values]
     if not data:
-        return {"count": 0, "min": None, "max": None, "mean": None, "stddev": None, "p50": None, "p95": None, "p99": None}
+        return {
+            "count": 0,
+            "min": None,
+            "max": None,
+            "mean": None,
+            "stddev": None,
+            "p50": None,
+            "p95": None,
+            "p99": None,
+        }
     return {
         "count": len(data),
         "min": min(data),

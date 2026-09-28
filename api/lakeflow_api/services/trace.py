@@ -82,7 +82,8 @@ def trace(ctx, table: str, key: str) -> dict:
                 record["snapshot_ids"] = _json(record.get("snapshot_ids")) or {}
                 batches[(record["stream_epoch"], record["batch_id"])] = record
         silver_rows, trino_ms = ctx.clients.trino(
-            f"SELECT * FROM lakehouse.{contract.target_table} WHERE {pk} = ?", [key]  # noqa: S608
+            f"SELECT * FROM lakehouse.{contract.target_table} WHERE {pk} = ?",
+            [key],  # noqa: S608
         )
         silver_row = silver_rows[0] if silver_rows else None
         sources.append("Trino: bronze.cdc_events, ops.dlq_events, ops.batch_commits, " + contract.target_table)
@@ -98,9 +99,17 @@ def trace(ctx, table: str, key: str) -> dict:
         errors.append(f"checkpoint: {exc}")
 
     result = assemble(
-        table=table, key=key, mutation=_mutation(mutation), source_row=_plain_row(source_row),
-        kafka_events=kafka_events, bronze_rows=bronze_rows, dlq_rows=dlq_rows, batches=batches,
-        committed_batch=committed, silver_row=silver_row, trino_ms=trino_ms,
+        table=table,
+        key=key,
+        mutation=_mutation(mutation),
+        source_row=_plain_row(source_row),
+        kafka_events=kafka_events,
+        bronze_rows=bronze_rows,
+        dlq_rows=dlq_rows,
+        batches=batches,
+        committed_batch=committed,
+        silver_row=silver_row,
+        trino_ms=trino_ms,
     )
     result["sources"] = sources + [f"unavailable: {e}" for e in errors]
     return result
@@ -119,8 +128,14 @@ def _iso(value):
 def _plain_row(row):
     if row is None:
         return None
-    return {k: (v.isoformat() if isinstance(v, datetime) else (str(v) if not isinstance(v, (int, float, bool, type(None))) else v))
-            for k, v in row.items()}
+    return {
+        k: (
+            v.isoformat()
+            if isinstance(v, datetime)
+            else (str(v) if not isinstance(v, (int, float, bool, type(None))) else v)
+        )
+        for k, v in row.items()
+    }
 
 
 def list_events(ctx, table=None, op=None, outcome=None, key=None, minutes=60, limit=100) -> dict:
@@ -141,7 +156,12 @@ def list_events(ctx, table=None, op=None, outcome=None, key=None, minutes=60, li
     )
     for row in rows:
         row["before"], row["after"] = _json(row.pop("before_json")), _json(row.pop("after_json"))
-    return {"events": rows, "count": len(rows), "as_of": datetime.now(timezone.utc), "source": "Trino: bronze.cdc_events"}
+    return {
+        "events": rows,
+        "count": len(rows),
+        "as_of": datetime.now(timezone.utc),
+        "source": "Trino: bronze.cdc_events",
+    }
 
 
 def recent_batches(ctx, limit=50) -> dict:

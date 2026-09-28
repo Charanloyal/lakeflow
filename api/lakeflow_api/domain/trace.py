@@ -67,32 +67,60 @@ def assemble(
     if mutation or source_row or latest:
         at = _ts(kafka["source_ts_ms"]) if kafka else (bronze and _iso(bronze.get("source_ts")))
         at = at or (mutation and mutation.get("committed_at"))
-        stages.append(_stage(
-            "postgres", "done", at,
-            tx_id=(kafka or {}).get("tx_id") or (bronze or {}).get("source_tx_id") or (mutation or {}).get("txid"),
-            wal_lsn_after_commit=(mutation or {}).get("commit_lsn"),
-            row_present=source_row is not None,
-        ))
+        stages.append(
+            _stage(
+                "postgres",
+                "done",
+                at,
+                tx_id=(kafka or {}).get("tx_id") or (bronze or {}).get("source_tx_id") or (mutation or {}).get("txid"),
+                wal_lsn_after_commit=(mutation or {}).get("commit_lsn"),
+                row_present=source_row is not None,
+            )
+        )
     else:
         stages.append(_stage("postgres", "pending"))
 
     if kafka or bronze:
         lsn = latest_lsn
-        stages.append(_stage(
-            "debezium", "done", _ts((kafka or {}).get("debezium_ts_ms")) or _iso((bronze or {}).get("debezium_ts")),
-            source_lsn=lsn, lsn=int_to_lsn(lsn) if lsn is not None else None, op=(kafka or bronze).get("op"),
-            snapshot=(kafka or {}).get("snapshot") or (bronze or {}).get("source_snapshot"),
-        ))
-        coords = kafka or {"topic": bronze["kafka_topic"], "partition": bronze["kafka_partition"],
-                           "offset": bronze["kafka_offset"], "kafka_ts_ms": None}
-        stages.append(_stage(
-            "kafka", "done", _ts(coords.get("kafka_ts_ms")) or _iso((bronze or {}).get("kafka_ts")),
-            topic=coords["topic"], partition=coords["partition"], offset=coords["offset"],
-        ))
+        stages.append(
+            _stage(
+                "debezium",
+                "done",
+                _ts((kafka or {}).get("debezium_ts_ms")) or _iso((bronze or {}).get("debezium_ts")),
+                source_lsn=lsn,
+                lsn=int_to_lsn(lsn) if lsn is not None else None,
+                op=(kafka or bronze).get("op"),
+                snapshot=(kafka or {}).get("snapshot") or (bronze or {}).get("source_snapshot"),
+            )
+        )
+        coords = kafka or {
+            "topic": bronze["kafka_topic"],
+            "partition": bronze["kafka_partition"],
+            "offset": bronze["kafka_offset"],
+            "kafka_ts_ms": None,
+        }
+        stages.append(
+            _stage(
+                "kafka",
+                "done",
+                _ts(coords.get("kafka_ts_ms")) or _iso((bronze or {}).get("kafka_ts")),
+                topic=coords["topic"],
+                partition=coords["partition"],
+                offset=coords["offset"],
+            )
+        )
     elif rejected:
         stages.append(_stage("debezium", "done", None))
-        stages.append(_stage("kafka", "done", _iso(rejected.get("kafka_ts")), topic=rejected.get("kafka_topic"),
-                             partition=rejected.get("kafka_partition"), offset=rejected.get("kafka_offset")))
+        stages.append(
+            _stage(
+                "kafka",
+                "done",
+                _iso(rejected.get("kafka_ts")),
+                topic=rejected.get("kafka_topic"),
+                partition=rejected.get("kafka_partition"),
+                offset=rejected.get("kafka_offset"),
+            )
+        )
     else:
         stages.append(_stage("debezium", "pending"))
         stages.append(_stage("kafka", "pending"))
@@ -100,20 +128,42 @@ def assemble(
     batch = None
     if bronze:
         batch = batches.get((bronze["stream_epoch"], bronze["batch_id"]))
-        stages.append(_stage(
-            "spark", "done", _iso(bronze.get("committed_at")), batch_id=bronze["batch_id"],
-            outcome=bronze["apply_outcome"], is_late=bronze["is_late"], contract_version=bronze["contract_version"],
-            attempts=(batch or {}).get("attempts"),
-        ))
+        stages.append(
+            _stage(
+                "spark",
+                "done",
+                _iso(bronze.get("committed_at")),
+                batch_id=bronze["batch_id"],
+                outcome=bronze["apply_outcome"],
+                is_late=bronze["is_late"],
+                contract_version=bronze["contract_version"],
+                attempts=(batch or {}).get("attempts"),
+            )
+        )
         committed = committed_batch.get(bronze["stream_epoch"])
         if committed is not None and committed >= bronze["batch_id"]:
             stages.append(_stage("checkpoint", "done", None, batch_id=bronze["batch_id"], committed_through=committed))
         else:
-            stages.append(_stage("checkpoint", "pending", None, batch_id=bronze["batch_id"],
-                                 note="Iceberg committed; Spark has not written commits/N yet (or is replaying)"))
+            stages.append(
+                _stage(
+                    "checkpoint",
+                    "pending",
+                    None,
+                    batch_id=bronze["batch_id"],
+                    note="Iceberg committed; Spark has not written commits/N yet (or is replaying)",
+                )
+            )
     elif rejected and not kafka:
-        stages.append(_stage("spark", "failed", _iso(rejected.get("first_seen_at")), outcome="dlq",
-                             error_code=rejected.get("error_code"), dlq_id=rejected.get("dlq_id")))
+        stages.append(
+            _stage(
+                "spark",
+                "failed",
+                _iso(rejected.get("first_seen_at")),
+                outcome="dlq",
+                error_code=rejected.get("error_code"),
+                dlq_id=rejected.get("dlq_id"),
+            )
+        )
         stages.append(_stage("checkpoint", "skipped"))
     else:
         stages.append(_stage("spark", "pending"))
@@ -133,8 +183,15 @@ def assemble(
 
     visible = silver_row is not None and latest_lsn is not None and (silver_row.get("_source_lsn") or -1) >= latest_lsn
     if visible:
-        stages.append(_stage("trino", "done", now.isoformat(), query_ms=None if trino_ms is None else round(trino_ms, 1),
-                             is_deleted=silver_row.get("is_deleted")))
+        stages.append(
+            _stage(
+                "trino",
+                "done",
+                now.isoformat(),
+                query_ms=None if trino_ms is None else round(trino_ms, 1),
+                is_deleted=silver_row.get("is_deleted"),
+            )
+        )
     elif bronze and not applied and silver_row is not None:
         stages.append(_stage("trino", "done", now.isoformat(), query_ms=trino_ms, note="current state unchanged"))
     else:
@@ -152,26 +209,28 @@ def assemble(
         entry = by_lsn[lsn]
         row, live = entry.get("bronze") or {}, entry.get("kafka") or {}
         rec = batches.get((row.get("stream_epoch"), row.get("batch_id"))) if row else None
-        events.append({
-            "event_id": row.get("event_id"),
-            "op": row.get("op") or live.get("op"),
-            "source_lsn": lsn,
-            "lsn": int_to_lsn(lsn),
-            "tx_id": row.get("source_tx_id") or live.get("tx_id"),
-            "source_ts": _iso(row.get("source_ts")) or _ts(live.get("source_ts_ms")),
-            "kafka_topic": row.get("kafka_topic") or live.get("topic"),
-            "kafka_partition": row.get("kafka_partition") if row else live.get("partition"),
-            "kafka_offset": row.get("kafka_offset") if row else live.get("offset"),
-            "batch_id": row.get("batch_id"),
-            "apply_outcome": row.get("apply_outcome"),
-            "is_late": row.get("is_late"),
-            "contract_version": row.get("contract_version"),
-            "before": row.get("before"),
-            "after": row.get("after"),
-            "committed_at": _iso(row.get("committed_at")),
-            "snapshot_id": ((rec or {}).get("snapshot_ids") or {}).get(target),
-            "injection_id": row.get("injection_id") or live.get("injection_id"),
-        })
+        events.append(
+            {
+                "event_id": row.get("event_id"),
+                "op": row.get("op") or live.get("op"),
+                "source_lsn": lsn,
+                "lsn": int_to_lsn(lsn),
+                "tx_id": row.get("source_tx_id") or live.get("tx_id"),
+                "source_ts": _iso(row.get("source_ts")) or _ts(live.get("source_ts_ms")),
+                "kafka_topic": row.get("kafka_topic") or live.get("topic"),
+                "kafka_partition": row.get("kafka_partition") if row else live.get("partition"),
+                "kafka_offset": row.get("kafka_offset") if row else live.get("offset"),
+                "batch_id": row.get("batch_id"),
+                "apply_outcome": row.get("apply_outcome"),
+                "is_late": row.get("is_late"),
+                "contract_version": row.get("contract_version"),
+                "before": row.get("before"),
+                "after": row.get("after"),
+                "committed_at": _iso(row.get("committed_at")),
+                "snapshot_id": ((rec or {}).get("snapshot_ids") or {}).get(target),
+                "injection_id": row.get("injection_id") or live.get("injection_id"),
+            }
+        )
     return {
         "table": table,
         "key": key,

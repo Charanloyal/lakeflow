@@ -6,8 +6,27 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-TEXT_SUFFIXES = {".py", ".md", ".json", ".yml", ".yaml", ".ts", ".tsx", ".js", ".mjs", ".sql", ".sh", ".properties",
-                 ".conf", ".toml", ".txt", ".example", ".cfg", ".css", ""}
+TEXT_SUFFIXES = {
+    ".py",
+    ".md",
+    ".json",
+    ".yml",
+    ".yaml",
+    ".ts",
+    ".tsx",
+    ".js",
+    ".mjs",
+    ".sql",
+    ".sh",
+    ".properties",
+    ".conf",
+    ".toml",
+    ".txt",
+    ".example",
+    ".cfg",
+    ".css",
+    "",
+}
 SELF = Path(__file__).resolve()
 AUDIT = ROOT / "docs" / "audit"
 
@@ -25,14 +44,16 @@ CLAIM_PATTERNS = {
     "100% exactly-once": re.compile(r"100\s*%\s*exactly", re.IGNORECASE),
 }
 EXACTLY_ONCE = re.compile(r"exactly[- ]once", re.IGNORECASE)
-QUALIFIERS = re.compile(r"\b(not|no|never|without|effectively|qualif|instead|rather|isn't|is not|does not)\b",
-                        re.IGNORECASE)
+QUALIFIERS = re.compile(
+    r"\b(not|no|never|without|effectively|qualif|instead|rather|isn't|is not|does not)\b", re.IGNORECASE
+)
 
 
 def tracked_files():
     try:
-        out = subprocess.run(["git", "ls-files", "-co", "--exclude-standard"], cwd=ROOT, capture_output=True,
-                             text=True, check=True).stdout
+        out = subprocess.run(
+            ["git", "ls-files", "-co", "--exclude-standard"], cwd=ROOT, capture_output=True, text=True, check=True
+        ).stdout
         paths = [ROOT / line for line in out.splitlines() if line]
     except (OSError, subprocess.CalledProcessError):
         paths = [p for p in ROOT.rglob("*") if p.is_file() and ".git" not in p.parts]
@@ -66,8 +87,10 @@ class HygieneTests(unittest.TestCase):
                 continue
             name, value = line.split("=", 1)
             if re.search(r"(PASSWORD|SECRET|_KEY)$", name) and value:
-                self.assertTrue(value.startswith("local-only-") or value == "__GENERATE__",
-                                f"{name} must be a local-only placeholder or __GENERATE__")
+                self.assertTrue(
+                    value.startswith("local-only-") or value == "__GENERATE__",
+                    f"{name} must be a local-only placeholder or __GENERATE__",
+                )
 
 
 if __name__ == "__main__":

@@ -17,8 +17,17 @@ def _now() -> datetime:
 
 def metric(name, label, value, unit, as_of, source, window=None, note=None) -> dict:
     stale = as_of is None or (_now() - as_of) > STALE_AFTER
-    return {"name": name, "label": label, "value": value, "unit": unit, "as_of": as_of, "source": source,
-            "window": window, "stale": stale, "note": note}
+    return {
+        "name": name,
+        "label": label,
+        "value": value,
+        "unit": unit,
+        "as_of": as_of,
+        "source": source,
+        "window": window,
+        "stale": stale,
+        "note": note,
+    }
 
 
 def _trino_window_stats(ctx) -> dict:
@@ -59,37 +68,99 @@ def overview(ctx) -> dict:
     input_rows = stats.get("input_rows") or 0
     slot = ctx.monitor.slot or {}
     metrics = [
-        metric("event_throughput", "Change events / s (Kafka, 1 min)", round(rate, 2), "events/s", tracer_as_of,
-               "API Kafka tail on lakeflow.shop.*", "60s", None if ctx.tracer.running else ctx.tracer.error),
-        metric("freshness_p95", "p95 end-to-end freshness (orders)", _round(stats.get("p95")), "s", trino_as_of,
-               "Trino: bronze.cdc_events (commit - source ts)", "15m", stats.get("error") or _no_data(stats.get("n"))),
-        metric("freshness_p50", "p50 end-to-end freshness (orders)", _round(stats.get("p50")), "s", trino_as_of,
-               "Trino: bronze.cdc_events (commit - source ts)", "15m", stats.get("error") or _no_data(stats.get("n"))),
-        metric("consumer_lag", "Consumer lag", lag_total, "messages", ctx.monitor.lag_as_of,
-               "Kafka end offsets - Spark checkpoint commits"),
-        metric("slot_lag", "Replication slot lag", slot.get("lag_bytes"), "bytes", slot.get("as_of"),
-               "pg_replication_slots.confirmed_flush_lsn"),
-        metric("error_rate", "DLQ rate", round(100.0 * (stats.get("dlq_rows") or 0) / input_rows, 3) if input_rows else None,
-               "%", trino_as_of, "Trino: ops.batch_commits (dlq_rows / input_rows)", "15m",
-               stats.get("error") or (None if input_rows else "no records processed in window")),
-        metric("duplicates", "Duplicates absorbed", stats.get("duplicates"), "events", trino_as_of,
-               "Trino: ops.batch_commits", "15m", stats.get("error")),
+        metric(
+            "event_throughput",
+            "Change events / s (Kafka, 1 min)",
+            round(rate, 2),
+            "events/s",
+            tracer_as_of,
+            "API Kafka tail on lakeflow.shop.*",
+            "60s",
+            None if ctx.tracer.running else ctx.tracer.error,
+        ),
+        metric(
+            "freshness_p95",
+            "p95 end-to-end freshness (orders)",
+            _round(stats.get("p95")),
+            "s",
+            trino_as_of,
+            "Trino: bronze.cdc_events (commit - source ts)",
+            "15m",
+            stats.get("error") or _no_data(stats.get("n")),
+        ),
+        metric(
+            "freshness_p50",
+            "p50 end-to-end freshness (orders)",
+            _round(stats.get("p50")),
+            "s",
+            trino_as_of,
+            "Trino: bronze.cdc_events (commit - source ts)",
+            "15m",
+            stats.get("error") or _no_data(stats.get("n")),
+        ),
+        metric(
+            "consumer_lag",
+            "Consumer lag",
+            lag_total,
+            "messages",
+            ctx.monitor.lag_as_of,
+            "Kafka end offsets - Spark checkpoint commits",
+        ),
+        metric(
+            "slot_lag",
+            "Replication slot lag",
+            slot.get("lag_bytes"),
+            "bytes",
+            slot.get("as_of"),
+            "pg_replication_slots.confirmed_flush_lsn",
+        ),
+        metric(
+            "error_rate",
+            "DLQ rate",
+            round(100.0 * (stats.get("dlq_rows") or 0) / input_rows, 3) if input_rows else None,
+            "%",
+            trino_as_of,
+            "Trino: ops.batch_commits (dlq_rows / input_rows)",
+            "15m",
+            stats.get("error") or (None if input_rows else "no records processed in window"),
+        ),
+        metric(
+            "duplicates",
+            "Duplicates absorbed",
+            stats.get("duplicates"),
+            "events",
+            trino_as_of,
+            "Trino: ops.batch_commits",
+            "15m",
+            stats.get("error"),
+        ),
         metric("events_seen", "Events seen by tracer", count, "events", tracer_as_of, "API Kafka tail", "60s"),
     ]
     contract = ctx.registry.current("orders")
     target = float(contract.freshness_sla["p95_seconds"])
     observed = _round(stats.get("p95"))
-    sla = [{
-        "contract": "orders", "p95_target_seconds": target, "p95_observed_seconds": observed,
-        "status": "no_data" if observed is None else ("met" if observed <= target else "breached"),
-        "as_of": trino_as_of, "source": "Trino: bronze.cdc_events (shop.orders, 15 min)",
-    }]
+    sla = [
+        {
+            "contract": "orders",
+            "p95_target_seconds": target,
+            "p95_observed_seconds": observed,
+            "status": "no_data" if observed is None else ("met" if observed <= target else "breached"),
+            "as_of": trino_as_of,
+            "source": "Trino: bronze.cdc_events (shop.orders, 15 min)",
+        }
+    ]
     try:
         incidents = ctx.store.incidents(10)
     except Exception:  # noqa: BLE001
         incidents = []
-    return {"environment": ctx.settings.environment, "overall": overall(probes), "metrics": metrics, "sla": sla,
-            "incidents": incidents, "as_of": now}
+    return {
+        "environment": ctx.settings.environment,
+        "overall": overall(probes),
+        "metrics": metrics,
+        "sla": sla,
+        "incidents": incidents,
+        "as_of": now,
+    }
 
 
 def _round(value, digits=2):
@@ -102,9 +173,19 @@ def _no_data(n):
 
 def components(ctx) -> dict:
     probes = ctx.monitor.snapshot()
-    items = [probes.get(name) or {"component": name, "label": label, "status": "unknown", "checked_at": None,
-                                  "detail": "not probed yet", "source": "monitor", "data": {}}
-             for name, label in COMPONENTS]
+    items = [
+        probes.get(name)
+        or {
+            "component": name,
+            "label": label,
+            "status": "unknown",
+            "checked_at": None,
+            "detail": "not probed yet",
+            "source": "monitor",
+            "data": {},
+        }
+        for name, label in COMPONENTS
+    ]
     return {"overall": overall(probes), "components": items, "as_of": _now()}
 
 
@@ -114,8 +195,13 @@ def topology(ctx) -> dict:
 
     def node(component, label, metrics):
         probe = probes.get(component, {})
-        return {"id": component, "label": label, "status": probe.get("status", "unknown"),
-                "detail": probe.get("detail", "not probed yet"), "metrics": metrics}
+        return {
+            "id": component,
+            "label": label,
+            "status": probe.get("status", "unknown"),
+            "detail": probe.get("detail", "not probed yet"),
+            "metrics": metrics,
+        }
 
     checked = {k: v.get("checked_at") for k, v in probes.items()}
     slot = ctx.monitor.slot or {}
@@ -123,40 +209,122 @@ def topology(ctx) -> dict:
     debezium = probes.get("debezium", {}).get("data", {})
     offsets = ctx.monitor.end_offsets
     nodes = [
-        node("postgres", "PostgreSQL WAL", [
-            metric("current_lsn", "Current WAL LSN", slot.get("current_lsn"), "lsn", slot.get("as_of"), "pg_current_wal_lsn()"),
-            metric("confirmed_flush_lsn", "Slot confirmed LSN", slot.get("confirmed_flush_lsn"), "lsn", slot.get("as_of"),
-                   "pg_replication_slots"),
-        ]),
-        node("debezium", "Debezium", [
-            metric("heartbeat_age", "Heartbeat age", debezium.get("heartbeat_age_s"), "s", checked.get("debezium"),
-                   "__debezium-heartbeat.lakeflow"),
-        ]),
-        node("kafka", "Kafka", [
-            metric(f"end_offset_{t}", f"{t} end offsets", sum(p.values()), "messages", checked.get("kafka"),
-                   "Kafka watermark offsets") for t, p in sorted(offsets.items())
-        ]),
-        node("spark", "Spark", [
-            metric("last_batch_id", "Last batch", spark.get("last_batch_id"), "batch", checked.get("spark"), "Spark /metrics"),
-            metric("last_batch_age", "Last batch age", spark.get("last_batch_age_s"), "s", checked.get("spark"),
-                   "Spark /metrics"),
-            metric("checkpoint_batch", "Checkpoint committed batch", spark.get("checkpoint_committed_batch"), "batch",
-                   checked.get("spark"), "checkpoint commits/"),
-        ]),
-        node("iceberg", "Iceberg", [
-            metric("latest_snapshot", "Latest silver.orders snapshot", probes.get("iceberg", {}).get("data", {}).get("snapshot_id"),
-                   "id", checked.get("iceberg"), 'Trino: "orders$snapshots"'),
-        ]),
+        node(
+            "postgres",
+            "PostgreSQL WAL",
+            [
+                metric(
+                    "current_lsn",
+                    "Current WAL LSN",
+                    slot.get("current_lsn"),
+                    "lsn",
+                    slot.get("as_of"),
+                    "pg_current_wal_lsn()",
+                ),
+                metric(
+                    "confirmed_flush_lsn",
+                    "Slot confirmed LSN",
+                    slot.get("confirmed_flush_lsn"),
+                    "lsn",
+                    slot.get("as_of"),
+                    "pg_replication_slots",
+                ),
+            ],
+        ),
+        node(
+            "debezium",
+            "Debezium",
+            [
+                metric(
+                    "heartbeat_age",
+                    "Heartbeat age",
+                    debezium.get("heartbeat_age_s"),
+                    "s",
+                    checked.get("debezium"),
+                    "__debezium-heartbeat.lakeflow",
+                ),
+            ],
+        ),
+        node(
+            "kafka",
+            "Kafka",
+            [
+                metric(
+                    f"end_offset_{t}",
+                    f"{t} end offsets",
+                    sum(p.values()),
+                    "messages",
+                    checked.get("kafka"),
+                    "Kafka watermark offsets",
+                )
+                for t, p in sorted(offsets.items())
+            ],
+        ),
+        node(
+            "spark",
+            "Spark",
+            [
+                metric(
+                    "last_batch_id",
+                    "Last batch",
+                    spark.get("last_batch_id"),
+                    "batch",
+                    checked.get("spark"),
+                    "Spark /metrics",
+                ),
+                metric(
+                    "last_batch_age",
+                    "Last batch age",
+                    spark.get("last_batch_age_s"),
+                    "s",
+                    checked.get("spark"),
+                    "Spark /metrics",
+                ),
+                metric(
+                    "checkpoint_batch",
+                    "Checkpoint committed batch",
+                    spark.get("checkpoint_committed_batch"),
+                    "batch",
+                    checked.get("spark"),
+                    "checkpoint commits/",
+                ),
+            ],
+        ),
+        node(
+            "iceberg",
+            "Iceberg",
+            [
+                metric(
+                    "latest_snapshot",
+                    "Latest silver.orders snapshot",
+                    probes.get("iceberg", {}).get("data", {}).get("snapshot_id"),
+                    "id",
+                    checked.get("iceberg"),
+                    'Trino: "orders$snapshots"',
+                ),
+            ],
+        ),
         node("trino", "Trino", []),
     ]
     lag_total = sum(ctx.monitor.lag.values()) if ctx.monitor.lag else None
     edges = [
-        {"source": "postgres", "target": "debezium", "label": "logical replication (pgoutput)",
-         "lag": metric("slot_lag", "Slot lag", slot.get("lag_bytes"), "bytes", slot.get("as_of"), "pg_replication_slots")},
+        {
+            "source": "postgres",
+            "target": "debezium",
+            "label": "logical replication (pgoutput)",
+            "lag": metric(
+                "slot_lag", "Slot lag", slot.get("lag_bytes"), "bytes", slot.get("as_of"), "pg_replication_slots"
+            ),
+        },
         {"source": "debezium", "target": "kafka", "label": "change events (key = PK)", "lag": None},
-        {"source": "kafka", "target": "spark", "label": "micro-batches",
-         "lag": metric("consumer_lag", "Consumer lag", lag_total, "messages", ctx.monitor.lag_as_of,
-                       "end offsets - checkpoint")},
+        {
+            "source": "kafka",
+            "target": "spark",
+            "label": "micro-batches",
+            "lag": metric(
+                "consumer_lag", "Consumer lag", lag_total, "messages", ctx.monitor.lag_as_of, "end offsets - checkpoint"
+            ),
+        },
         {"source": "spark", "target": "iceberg", "label": "idempotent MERGE / append", "lag": None},
         {"source": "iceberg", "target": "trino", "label": "REST catalog snapshots", "lag": None},
     ]

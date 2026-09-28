@@ -2,8 +2,8 @@ import json
 import unittest
 from pathlib import Path
 
-from lakeflow_core.decode import DECODED_SCHEMA, decode_change_event
 from lakeflow_core.contracts import load_registry
+from lakeflow_core.decode import DECODED_SCHEMA, decode_change_event
 from lakeflow_core.identity import pii_hmac
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -22,8 +22,18 @@ TOPIC = "lakeflow.shop.orders"
 
 
 def envelope(op="c", before=None, after=None, lsn=24023184, tx=747, ts=1790323163123, dbz_ts=1790323163456, **src):
-    source = {"version": "2.7.3.Final", "connector": "postgresql", "name": "lakeflow", "ts_ms": ts,
-              "snapshot": "false", "db": "lakeflow", "schema": "shop", "table": "orders", "txId": tx, "lsn": lsn}
+    source = {
+        "version": "2.7.3.Final",
+        "connector": "postgresql",
+        "name": "lakeflow",
+        "ts_ms": ts,
+        "snapshot": "false",
+        "db": "lakeflow",
+        "schema": "shop",
+        "table": "orders",
+        "txId": tx,
+        "lsn": lsn,
+    }
     source.update(src)
     doc = {"before": before, "after": after, "source": source, "op": op, "ts_ms": dbz_ts, "transaction": None}
     return json.dumps(doc).encode()
@@ -44,8 +54,10 @@ class DecodeTests(unittest.TestCase):
     def test_valid_insert_is_normalized(self):
         out = decode(envelope(after=ORDER))
         self.assertEqual(out["status"], "valid")
-        self.assertEqual((out["op"], out["primary_key"], out["source_lsn"], out["contract_version"]),
-                         ("c", ORDER["order_id"], 24023184, 1))
+        self.assertEqual(
+            (out["op"], out["primary_key"], out["source_lsn"], out["contract_version"]),
+            ("c", ORDER["order_id"], 24023184, 1),
+        )
         after = json.loads(out["after_json"])
         self.assertEqual(after["created_at"], "2026-09-25T10:00:00.123400Z")
         self.assertEqual(after["updated_at"], "2026-09-25T10:00:00.000000Z")
@@ -98,11 +110,22 @@ class DecodeTests(unittest.TestCase):
         self.assertNotIn("internal_note", json.loads(out["after_json"]))
 
     def test_customer_pii_is_hashed_and_dropped(self):
-        customer = {"customer_id": ORDER["customer_id"], "email": "Ada.Lovelace@Example.com", "full_name": "Ada",
-                    "country": "GB", "created_at": "2026-09-01T08:30:00Z", "updated_at": "2026-09-01T08:30:00Z"}
+        customer = {
+            "customer_id": ORDER["customer_id"],
+            "email": "Ada.Lovelace@Example.com",
+            "full_name": "Ada",
+            "country": "GB",
+            "created_at": "2026-09-01T08:30:00Z",
+            "updated_at": "2026-09-01T08:30:00Z",
+        }
         value = envelope(after=customer, table="customers")
-        out = decode_change_event("lakeflow.shop.customers", json.dumps({"customer_id": customer["customer_id"]}).encode(),
-                                  value, REGISTRY, PII_KEY)
+        out = decode_change_event(
+            "lakeflow.shop.customers",
+            json.dumps({"customer_id": customer["customer_id"]}).encode(),
+            value,
+            REGISTRY,
+            PII_KEY,
+        )
         self.assertEqual(out["status"], "valid", out["error_detail"])
         after = json.loads(out["after_json"])
         self.assertEqual(after["email_hmac"], pii_hmac("ada.lovelace@example.com", PII_KEY))

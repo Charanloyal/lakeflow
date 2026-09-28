@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import HTTPException
+
 from lakeflow_core import benchmark, lineage
 from lakeflow_core.adr import load_adrs
 
@@ -25,12 +26,15 @@ def lineage_graph(ctx) -> dict:
             try:
                 if parts[0] == "lakehouse" and len(parts) == 3:
                     rows, _ = ctx.clients.trino(
-                        f'SELECT summary[\'total-records\'] AS records, committed_at FROM lakehouse.{parts[1]}."{parts[2]}$snapshots" '  # noqa: S608
+                        f"SELECT summary['total-records'] AS records, committed_at FROM lakehouse.{parts[1]}.\"{parts[2]}$snapshots\" "  # noqa: S608
                         "ORDER BY committed_at DESC LIMIT 1"
                     )
                     if rows:
-                        live[dataset["id"]] = {"records": rows[0]["records"], "last_commit": rows[0]["committed_at"],
-                                               "source": "Iceberg snapshot summary"}
+                        live[dataset["id"]] = {
+                            "records": rows[0]["records"],
+                            "last_commit": rows[0]["committed_at"],
+                            "source": "Iceberg snapshot summary",
+                        }
                 elif parts[0] == "kafka":
                     offsets = ctx.monitor.end_offsets.get(".".join(parts[1:]))
                     if offsets is not None:
@@ -64,11 +68,20 @@ def benchmark_runs(ctx) -> dict:
         summary = benchmark.summarize_result(doc)
         profile = doc["config"].get("profile")
         limits = thresholds.get(profile or "", {})
-        runs.append({
-            "run_id": doc["run_id"], "file": doc["_file"], "created_at": doc["created_at"], "git_sha": doc["git_sha"],
-            "profile": profile, "environment": doc["environment"], "config": doc["config"], "workload": doc["workload"],
-            "summary": summary, "thresholds": benchmark.evaluate_thresholds(summary, limits) if limits else [],
-        })
+        runs.append(
+            {
+                "run_id": doc["run_id"],
+                "file": doc["_file"],
+                "created_at": doc["created_at"],
+                "git_sha": doc["git_sha"],
+                "profile": profile,
+                "environment": doc["environment"],
+                "config": doc["config"],
+                "workload": doc["workload"],
+                "summary": summary,
+                "thresholds": benchmark.evaluate_thresholds(summary, limits) if limits else [],
+            }
+        )
     runs.sort(key=lambda r: r["created_at"], reverse=True)
     return {"runs": runs, "source": "benchmarks/results/*.json (summaries recomputed from raw samples)"}
 

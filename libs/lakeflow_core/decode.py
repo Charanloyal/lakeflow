@@ -127,7 +127,9 @@ def _decode(
     if not isinstance(op, str):
         return _dlq(result, "INVALID_ENVELOPE", "envelope.op is missing", key, value)
     if op not in SUPPORTED_OPS:
-        return _dlq(result, "UNSUPPORTED_OP", f"op {op!r} is not applied by this pipeline (truncate/message)", key, value)
+        return _dlq(
+            result, "UNSUPPORTED_OP", f"op {op!r} is not applied by this pipeline (truncate/message)", key, value
+        )
 
     source = envelope.get("source")
     if not isinstance(source, dict):

@@ -47,8 +47,15 @@ def login(body: m.LoginRequest, request: Request, response: Response):
     identity = check_credentials(body.username, body.password, ctx.settings.users)
     if identity is None:
         raise HTTPException(401, "invalid username or password")
-    response.set_cookie(SESSION_COOKIE, sign_session(identity, ctx.settings.session_secret), max_age=8 * 3600,
-                        httponly=True, samesite="strict", secure=request.url.scheme == "https", path="/api")
+    response.set_cookie(
+        SESSION_COOKIE,
+        sign_session(identity, ctx.settings.session_secret),
+        max_age=8 * 3600,
+        httponly=True,
+        samesite="strict",
+        secure=request.url.scheme == "https",
+        path="/api",
+    )
     return {"user": identity.user, "role": identity.role}
 
 
@@ -99,8 +106,13 @@ def get_events(
 @api.get("/events/live", tags=["events"])
 def live_events(request: Request, limit: int = Query(50, ge=1, le=500)):
     ctx = ctx_of(request)
-    return {"events": ctx.tracer.recent(limit), "running": ctx.tracer.running, "error": ctx.tracer.error,
-            "as_of": datetime.now(timezone.utc), "source": "API Kafka tail (since API start)"}
+    return {
+        "events": ctx.tracer.recent(limit),
+        "running": ctx.tracer.running,
+        "error": ctx.tracer.error,
+        "as_of": datetime.now(timezone.utc),
+        "source": "API Kafka tail (since API start)",
+    }
 
 
 @api.get("/trace/{table}/{key}", response_model=m.TraceResponse, tags=["events"])
@@ -114,7 +126,9 @@ def get_trace(request: Request, table: str, key: str):
 def _limit_mutations(request: Request, identity: Identity) -> None:
     allowed, retry = ctx_of(request).mutation_limiter.allow(identity.user)
     if not allowed:
-        raise HTTPException(429, f"mutation rate limit; retry in {retry:.0f}s", headers={"Retry-After": str(int(retry) + 1)})
+        raise HTTPException(
+            429, f"mutation rate limit; retry in {retry:.0f}s", headers={"Retry-After": str(int(retry) + 1)}
+        )
 
 
 @api.post("/demo/orders", response_model=m.MutationResult, status_code=201, tags=["demo"])
@@ -153,8 +167,11 @@ def quality_run(body: m.QualityRunRequest, request: Request, identity: Identity 
 
 
 @api.get("/quality/rejected", response_model=m.DlqResponse, tags=["quality"])
-def quality_rejected(request: Request, status: str | None = Query(None, pattern=r"^(open|replayed)$"),
-                     limit: int = Query(100, ge=1, le=500)):
+def quality_rejected(
+    request: Request,
+    status: str | None = Query(None, pattern=r"^(open|replayed)$"),
+    limit: int = Query(100, ge=1, le=500),
+):
     return _trino_or_503(lambda: quality.rejected(ctx_of(request), status, limit))
 
 
@@ -247,8 +264,9 @@ async def stream_live(request: Request):
         finally:
             ctx.broadcaster.unsubscribe(q)
 
-    return StreamingResponse(events(), media_type="text/event-stream",
-                             headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
+    return StreamingResponse(
+        events(), media_type="text/event-stream", headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"}
+    )
 
 
 def _trino_or_503(fn):

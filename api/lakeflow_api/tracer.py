@@ -47,8 +47,15 @@ class Broadcaster:
 
 
 class Tracer:
-    def __init__(self, bootstrap: str, cdc_topics: tuple[str, ...], ops_topic: str, heartbeat_topic: str,
-                 broadcaster: Broadcaster, max_events: int = 20000):
+    def __init__(
+        self,
+        bootstrap: str,
+        cdc_topics: tuple[str, ...],
+        ops_topic: str,
+        heartbeat_topic: str,
+        broadcaster: Broadcaster,
+        max_events: int = 20000,
+    ):
         self.bootstrap = bootstrap
         self.topics = tuple(cdc_topics) + (ops_topic, heartbeat_topic)
         self.cdc_topics = set(cdc_topics)
@@ -69,8 +76,14 @@ class Tracer:
         threading.Thread(target=self._run, name="lakeflow-tracer", daemon=True).start()
 
     def _consumer(self) -> Consumer:
-        consumer = Consumer({"bootstrap.servers": self.bootstrap, "group.id": "lakeflow-api-tracer",
-                             "enable.auto.commit": False, "session.timeout.ms": 10000})
+        consumer = Consumer(
+            {
+                "bootstrap.servers": self.bootstrap,
+                "group.id": "lakeflow-api-tracer",
+                "enable.auto.commit": False,
+                "session.timeout.ms": 10000,
+            }
+        )
         metadata = consumer.list_topics(timeout=10)
         assignment = [
             TopicPartition(topic, partition, OFFSET_END)
@@ -117,7 +130,9 @@ class Tracer:
             self.last_heartbeat_ms = ts_ms
             return
         headers = {k: (v.decode() if isinstance(v, bytes) else v) for k, v in (message.headers() or [])}
-        event = summarize_record(topic, message.partition(), message.offset(), ts_ms, message.key(), message.value(), headers)
+        event = summarize_record(
+            topic, message.partition(), message.offset(), ts_ms, message.key(), message.value(), headers
+        )
         with self._lock:
             self.arrivals.append((time.time(), topic))
             self.events[(topic, str(message.partition()), message.offset())] = event
@@ -156,9 +171,21 @@ class Tracer:
 
 def summarize_record(topic, partition, offset, ts_ms, key, value, headers) -> dict:
     """Pull trace identifiers out of a raw Debezium record without validating it (the pipeline does that)."""
-    event = {"topic": topic, "partition": partition, "offset": offset, "kafka_ts_ms": ts_ms, "key": None, "lsn": None,
-             "tx_id": None, "op": None, "source_ts_ms": None, "debezium_ts_ms": None, "snapshot": None,
-             "injection_id": headers.get("lakeflow-injection-id"), "tombstone": value is None}
+    event = {
+        "topic": topic,
+        "partition": partition,
+        "offset": offset,
+        "kafka_ts_ms": ts_ms,
+        "key": None,
+        "lsn": None,
+        "tx_id": None,
+        "op": None,
+        "source_ts_ms": None,
+        "debezium_ts_ms": None,
+        "snapshot": None,
+        "injection_id": headers.get("lakeflow-injection-id"),
+        "tombstone": value is None,
+    }
     try:
         key_doc = json.loads(key) if key else None
         if isinstance(key_doc, dict) and len(key_doc) == 1:
@@ -166,8 +193,14 @@ def summarize_record(topic, partition, offset, ts_ms, key, value, headers) -> di
         if value is not None:
             doc = json.loads(value)
             source = doc.get("source") or {}
-            event.update(lsn=source.get("lsn"), tx_id=source.get("txId"), op=doc.get("op"), source_ts_ms=source.get("ts_ms"),
-                         debezium_ts_ms=doc.get("ts_ms"), snapshot=source.get("snapshot"))
+            event.update(
+                lsn=source.get("lsn"),
+                tx_id=source.get("txId"),
+                op=doc.get("op"),
+                source_ts_ms=source.get("ts_ms"),
+                debezium_ts_ms=doc.get("ts_ms"),
+                snapshot=source.get("snapshot"),
+            )
     except (TypeError, ValueError, AttributeError):
         event["malformed"] = True
     return event

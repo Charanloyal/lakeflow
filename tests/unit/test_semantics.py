@@ -7,14 +7,26 @@ LATENESS = 60_000
 
 
 def ev(eid, pk, lsn, op="u", ts=None, offset=None, partition=0, topic="lakeflow.shop.orders", status="PAID"):
-    return ChangeEvent(eid, "shop.orders", pk, op, lsn, ts if ts is not None else lsn * 1000, topic, partition,
-                       offset if offset is not None else lsn, {"order_id": pk, "status": status})
+    return ChangeEvent(
+        eid,
+        "shop.orders",
+        pk,
+        op,
+        lsn,
+        ts if ts is not None else lsn * 1000,
+        topic,
+        partition,
+        offset if offset is not None else lsn,
+        {"order_id": pk, "status": status},
+    )
 
 
 class PlanTests(unittest.TestCase):
     def test_insert_update_delete_in_one_batch(self):
         silver = {}
-        plan = plan_batch(0, [ev("a", "o1", 10, "c"), ev("b", "o1", 11), ev("c", "o1", 12, "d")], silver, {}, 0, LATENESS)
+        plan = plan_batch(
+            0, [ev("a", "o1", 10, "c"), ev("b", "o1", 11), ev("c", "o1", 12, "d")], silver, {}, 0, LATENESS
+        )
         self.assertEqual(plan.outcomes, {"a": "superseded", "b": "superseded", "c": "applied"})
         apply_plan(plan, silver)
         row = silver[("shop.orders", "o1")]
@@ -86,7 +98,7 @@ class PlanTests(unittest.TestCase):
             deliveries = events + rng.sample(events, 10)
             rng.shuffle(deliveries)
             for batch_id in range(0, len(deliveries), 7):
-                plan = plan_batch(batch_id, deliveries[batch_id:batch_id + 7], silver, bronze, 0, LATENESS)
+                plan = plan_batch(batch_id, deliveries[batch_id : batch_id + 7], silver, bronze, 0, LATENESS)
                 apply_plan(plan, silver)
                 bronze.update({e: batch_id for e in plan.bronze_appends})
             for pk in {e.pk for e in events}:

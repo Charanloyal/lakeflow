@@ -101,18 +101,47 @@ class PromTextTests(unittest.TestCase):
 
 
 def bronze(lsn, outcome="applied", batch=3):
-    return {"event_id": f"e{lsn}", "op": "u", "source_lsn": lsn, "source_tx_id": 700, "source_ts": "2026-09-25T10:00:00+00:00",
-            "source_snapshot": "false", "debezium_ts": "2026-09-25T10:00:00.500000+00:00", "kafka_topic": "lakeflow.shop.orders",
-            "kafka_partition": 1, "kafka_offset": 40 + lsn, "kafka_ts": "2026-09-25T10:00:00.600000+00:00",
-            "contract_version": 1, "is_late": False, "apply_outcome": outcome, "injection_id": None, "replay_of": None,
-            "batch_id": batch, "stream_epoch": "ep", "committed_at": "2026-09-25T10:00:07+00:00", "before": None, "after": {}}
+    return {
+        "event_id": f"e{lsn}",
+        "op": "u",
+        "source_lsn": lsn,
+        "source_tx_id": 700,
+        "source_ts": "2026-09-25T10:00:00+00:00",
+        "source_snapshot": "false",
+        "debezium_ts": "2026-09-25T10:00:00.500000+00:00",
+        "kafka_topic": "lakeflow.shop.orders",
+        "kafka_partition": 1,
+        "kafka_offset": 40 + lsn,
+        "kafka_ts": "2026-09-25T10:00:00.600000+00:00",
+        "contract_version": 1,
+        "is_late": False,
+        "apply_outcome": outcome,
+        "injection_id": None,
+        "replay_of": None,
+        "batch_id": batch,
+        "stream_epoch": "ep",
+        "committed_at": "2026-09-25T10:00:07+00:00",
+        "before": None,
+        "after": {},
+    }
 
 
 class TraceTests(unittest.TestCase):
     def base(self, **kw):
-        args = dict(table="orders", key="k1", mutation=None, source_row={"order_id": "k1"}, kafka_events=[], bronze_rows=[],
-                    dlq_rows=[], batches={}, committed_batch={}, silver_row=None, trino_ms=12.0,
-                    now=datetime(2026, 9, 25, 10, 0, 9, tzinfo=timezone.utc))
+        args = dict(
+            table="orders",
+            key="k1",
+            mutation=None,
+            source_row={"order_id": "k1"},
+            kafka_events=[],
+            bronze_rows=[],
+            dlq_rows=[],
+            batches={},
+            committed_batch={},
+            silver_row=None,
+            trino_ms=12.0,
+            now=datetime(2026, 9, 25, 10, 0, 9, tzinfo=timezone.utc),
+        )
         args.update(kw)
         return assemble(**args)
 
@@ -121,14 +150,33 @@ class TraceTests(unittest.TestCase):
 
     def test_nothing_downstream_yet(self):
         trace = self.base()
-        self.assertEqual(self.stages(trace), {"postgres": "done", "debezium": "pending", "kafka": "pending", "spark": "pending",
-                                              "checkpoint": "pending", "iceberg": "pending", "trino": "pending"})
+        self.assertEqual(
+            self.stages(trace),
+            {
+                "postgres": "done",
+                "debezium": "pending",
+                "kafka": "pending",
+                "spark": "pending",
+                "checkpoint": "pending",
+                "iceberg": "pending",
+                "trino": "pending",
+            },
+        )
 
     def test_fully_traced_event(self):
-        batches = {("ep", 3): {"attempts": 1, "committed_at": "2026-09-25T10:00:07+00:00",
-                               "snapshot_ids": {"silver.orders": 8123}}}
-        trace = self.base(bronze_rows=[bronze(100)], batches=batches, committed_batch={"ep": 3},
-                          silver_row={"_source_lsn": 100, "is_deleted": False})
+        batches = {
+            ("ep", 3): {
+                "attempts": 1,
+                "committed_at": "2026-09-25T10:00:07+00:00",
+                "snapshot_ids": {"silver.orders": 8123},
+            }
+        }
+        trace = self.base(
+            bronze_rows=[bronze(100)],
+            batches=batches,
+            committed_batch={"ep": 3},
+            silver_row={"_source_lsn": 100, "is_deleted": False},
+        )
         self.assertTrue(all(s == "done" for s in self.stages(trace).values()), trace["stages"])
         iceberg = next(s for s in trace["stages"] if s["stage"] == "iceberg")
         self.assertEqual(iceberg["details"]["snapshot_id"], 8123)
@@ -136,27 +184,57 @@ class TraceTests(unittest.TestCase):
         self.assertEqual(trace["events"][0]["lsn"], "0/64")
 
     def test_checkpoint_pending_between_iceberg_and_commit_marker(self):
-        batches = {("ep", 3): {"attempts": 1, "committed_at": "2026-09-25T10:00:07+00:00", "snapshot_ids": {"silver.orders": 1}}}
-        trace = self.base(bronze_rows=[bronze(100)], batches=batches, committed_batch={"ep": 2},
-                          silver_row={"_source_lsn": 100})
+        batches = {
+            ("ep", 3): {
+                "attempts": 1,
+                "committed_at": "2026-09-25T10:00:07+00:00",
+                "snapshot_ids": {"silver.orders": 1},
+            }
+        }
+        trace = self.base(
+            bronze_rows=[bronze(100)], batches=batches, committed_batch={"ep": 2}, silver_row={"_source_lsn": 100}
+        )
         self.assertEqual(self.stages(trace)["checkpoint"], "pending")
 
     def test_stale_event_skips_iceberg(self):
-        trace = self.base(bronze_rows=[bronze(90, outcome="stale")], silver_row={"_source_lsn": 100}, committed_batch={"ep": 3})
+        trace = self.base(
+            bronze_rows=[bronze(90, outcome="stale")], silver_row={"_source_lsn": 100}, committed_batch={"ep": 3}
+        )
         self.assertEqual(self.stages(trace)["iceberg"], "skipped")
         self.assertEqual(self.stages(trace)["trino"], "done")
         self.assertIsNone(trace["freshness_ms"])
 
     def test_rejected_event(self):
-        dlq = [{"dlq_id": "d" * 64, "error_code": "CONTRACT_VIOLATION", "kafka_topic": "lakeflow.shop.orders",
-                "kafka_partition": 0, "kafka_offset": 5, "kafka_ts": None, "first_seen_at": "2026-09-25T10:00:01+00:00"}]
+        dlq = [
+            {
+                "dlq_id": "d" * 64,
+                "error_code": "CONTRACT_VIOLATION",
+                "kafka_topic": "lakeflow.shop.orders",
+                "kafka_partition": 0,
+                "kafka_offset": 5,
+                "kafka_ts": None,
+                "first_seen_at": "2026-09-25T10:00:01+00:00",
+            }
+        ]
         trace = self.base(dlq_rows=dlq)
         self.assertEqual(self.stages(trace)["spark"], "failed")
 
     def test_live_kafka_event_before_bronze(self):
-        live = [{"topic": "lakeflow.shop.orders", "partition": 2, "offset": 77, "kafka_ts_ms": int(time.time() * 1000),
-                 "lsn": 555, "tx_id": 9, "op": "c", "source_ts_ms": 1790000000000, "debezium_ts_ms": 1790000000100,
-                 "snapshot": "false", "injection_id": None}]
+        live = [
+            {
+                "topic": "lakeflow.shop.orders",
+                "partition": 2,
+                "offset": 77,
+                "kafka_ts_ms": int(time.time() * 1000),
+                "lsn": 555,
+                "tx_id": 9,
+                "op": "c",
+                "source_ts_ms": 1790000000000,
+                "debezium_ts_ms": 1790000000100,
+                "snapshot": "false",
+                "injection_id": None,
+            }
+        ]
         trace = self.base(kafka_events=live)
         stages = self.stages(trace)
         self.assertEqual((stages["debezium"], stages["kafka"], stages["spark"]), ("done", "done", "pending"))

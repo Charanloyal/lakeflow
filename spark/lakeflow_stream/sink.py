@@ -20,12 +20,13 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from functools import reduce
 
-from lakeflow_core import tables as T
-from lakeflow_core.contracts import ContractError, ContractRegistry, contracts_fingerprint, load_registry
 from pyspark import StorageLevel
 from pyspark.sql import DataFrame, SparkSession, Window
 from pyspark.sql import functions as F
 from pyspark.sql.types import StringType, StructField, StructType
+
+from lakeflow_core import tables as T
+from lakeflow_core.contracts import ContractError, ContractRegistry, contracts_fingerprint, load_registry
 
 from .config import Settings
 from .control import ControlChannel
@@ -49,7 +50,11 @@ COMMON_PROPS = {
     "commit.retry.num-retries": "10",
     "history.expire.max-snapshot-age-ms": str(24 * 3600 * 1000),
 }
-MERGE_ON_READ = {"write.merge.mode": "merge-on-read", "write.update.mode": "merge-on-read", "write.delete.mode": "merge-on-read"}
+MERGE_ON_READ = {
+    "write.merge.mode": "merge-on-read",
+    "write.update.mode": "merge-on-read",
+    "write.delete.mode": "merge-on-read",
+}
 
 
 @dataclass
@@ -90,8 +95,13 @@ def ensure_tables(spark: SparkSession, registry: ContractRegistry, catalog: str)
     for namespace in T.NAMESPACES:
         spark.sql(f"CREATE NAMESPACE IF NOT EXISTS {catalog}.{namespace}")
     bronze_props = {**COMMON_PROPS, "write.parquet.bloom-filter-enabled.column.event_id": "true"}
-    _create_table(spark, f"{catalog}.{T.BRONZE_TABLE}", T.BRONZE_COLUMNS,
-                  "PARTITIONED BY (days(source_ts), source_table)", bronze_props)
+    _create_table(
+        spark,
+        f"{catalog}.{T.BRONZE_TABLE}",
+        T.BRONZE_COLUMNS,
+        "PARTITIONED BY (days(source_ts), source_table)",
+        bronze_props,
+    )
     _create_table(spark, f"{catalog}.{T.DLQ_TABLE}", T.DLQ_COLUMNS, "", COMMON_PROPS)
     _create_table(spark, f"{catalog}.{T.BATCH_TABLE}", T.BATCH_COLUMNS, "", COMMON_PROPS)
     for name in registry.names:
@@ -181,7 +191,9 @@ def decode(ctx: SinkContext, batch_df: DataFrame) -> DataFrame:
     )
     decoder = make_decoder(ctx.registry, ctx.settings.pii_key)
     keep = [c for c in base.columns if c not in ("key", "value")]
-    with_struct = base.withColumn("_d", decoder(F.coalesce("original_topic", "kafka_topic"), F.col("key"), F.col("value")))
+    with_struct = base.withColumn(
+        "_d", decoder(F.coalesce("original_topic", "kafka_topic"), F.col("key"), F.col("value"))
+    )
     return with_struct.select(*keep, "_d.*")
 
 
@@ -218,7 +230,9 @@ def plan(ctx: SinkContext, decoded: DataFrame, batch_id: int, watermark_ms: int,
     is_late = F.col("source_ts_ms") < F.lit(watermark_ms)
 
     candidates = joined.where(~F.col("_prior_dup"))
-    by_key = Window.partitionBy("source_table", "primary_key").orderBy(F.col("source_lsn").desc(), F.col("kafka_offset").desc())
+    by_key = Window.partitionBy("source_table", "primary_key").orderBy(
+        F.col("source_lsn").desc(), F.col("kafka_offset").desc()
+    )
     candidates = candidates.withColumn("_key_rank", F.row_number().over(by_key))
 
     parts = []
@@ -287,7 +301,11 @@ def merge_silver_sql(ctx: SinkContext, name: str, view: str) -> str:
         "_ingested_at = s._ingested_at",
     ]
     delete_set = ["is_deleted = true", "deleted_at = s.deleted_at", *meta]
-    upsert_set = [f"{c} = s.{c}" for c in data if c != pk] + ["is_deleted = false", "deleted_at = CAST(NULL AS TIMESTAMP)", *meta]
+    upsert_set = [f"{c} = s.{c}" for c in data if c != pk] + [
+        "is_deleted = false",
+        "deleted_at = CAST(NULL AS TIMESTAMP)",
+        *meta,
+    ]
     return (
         f"MERGE INTO {ctx.table(contract.target_table)} t USING {view} s ON t.{pk} = s.{pk} "
         f"WHEN MATCHED AND s._source_lsn > t._source_lsn AND s._source_op = 'd' THEN UPDATE SET {', '.join(delete_set)} "
@@ -298,11 +316,30 @@ def merge_silver_sql(ctx: SinkContext, name: str, view: str) -> str:
 
 def _bronze_rows(ctx: SinkContext, planned: DataFrame, batch_id: int, committed_at: datetime) -> DataFrame:
     rows = planned.where(F.col("apply_outcome") != "duplicate").select(
-        "event_id", "source_table", "primary_key", "op", "source_lsn", "source_tx_id", "source_ts", "source_snapshot",
-        F.expr("timestamp_millis(debezium_ts_ms)").alias("debezium_ts"), "kafka_topic", "kafka_partition",
-        "kafka_offset", "kafka_ts", "contract_name", "contract_version", "drift_fields", "before_json", "after_json",
-        "is_late", "apply_outcome", "injection_id", "replay_of",
-        F.lit(batch_id).cast("bigint").alias("batch_id"), F.lit(ctx.epoch).alias("stream_epoch"),
+        "event_id",
+        "source_table",
+        "primary_key",
+        "op",
+        "source_lsn",
+        "source_tx_id",
+        "source_ts",
+        "source_snapshot",
+        F.expr("timestamp_millis(debezium_ts_ms)").alias("debezium_ts"),
+        "kafka_topic",
+        "kafka_partition",
+        "kafka_offset",
+        "kafka_ts",
+        "contract_name",
+        "contract_version",
+        "drift_fields",
+        "before_json",
+        "after_json",
+        "is_late",
+        "apply_outcome",
+        "injection_id",
+        "replay_of",
+        F.lit(batch_id).cast("bigint").alias("batch_id"),
+        F.lit(ctx.epoch).alias("stream_epoch"),
         F.lit(committed_at).alias("committed_at"),
     )
     return rows.select(*[F.col(c).cast(kind).alias(c) for c, kind in T.BRONZE_COLUMNS])
@@ -312,23 +349,39 @@ def _dlq_rows(ctx: SinkContext, decoded: DataFrame, batch_id: int, seen_at: date
     position = F.format_string("%05d:%020d", F.col("kafka_partition"), F.col("kafka_offset"))
     coordinates_id = F.sha2(F.concat_ws("|", "kafka_topic", "kafka_partition", "kafka_offset"), 256)
     common = [
-        F.col("kafka_topic"), F.col("kafka_partition"), F.col("kafka_offset"), F.col("kafka_ts"),
-        F.coalesce("original_topic", "kafka_topic").alias("source_topic"), F.col("contract_name"),
-        F.col("raw_key"), F.col("raw_value"), F.col("injection_id"), position.alias("replay_position"),
-        F.col("replay_of").isNotNull().alias("is_replay"), F.lit(seen_at).alias("seen_at"),
+        F.col("kafka_topic"),
+        F.col("kafka_partition"),
+        F.col("kafka_offset"),
+        F.col("kafka_ts"),
+        F.coalesce("original_topic", "kafka_topic").alias("source_topic"),
+        F.col("contract_name"),
+        F.col("raw_key"),
+        F.col("raw_value"),
+        F.col("injection_id"),
+        position.alias("replay_position"),
+        F.col("replay_of").isNotNull().alias("is_replay"),
+        F.lit(seen_at).alias("seen_at"),
         F.lit(batch_id).cast("bigint").alias("batch_id"),
     ]
     rejected = decoded.where(F.col("status") == "dlq").select(
-        F.coalesce("replay_of", coordinates_id).alias("dlq_id"), *common,
-        F.col("error_code"), F.col("error_detail"), F.col("violations"),
-        F.lit("open").alias("new_status"), F.lit(None).cast("timestamp").alias("resolved_at"),
+        F.coalesce("replay_of", coordinates_id).alias("dlq_id"),
+        *common,
+        F.col("error_code"),
+        F.col("error_detail"),
+        F.col("violations"),
+        F.lit("open").alias("new_status"),
+        F.lit(None).cast("timestamp").alias("resolved_at"),
         F.lit(None).cast("bigint").alias("resolved_batch_id"),
     )
     resolved = decoded.where((F.col("status") == "valid") & F.col("replay_of").isNotNull()).select(
-        F.col("replay_of").alias("dlq_id"), *common,
-        F.lit(None).cast("string").alias("error_code"), F.lit(None).cast("string").alias("error_detail"),
-        F.lit(None).cast("array<string>").alias("violations"), F.lit("replayed").alias("new_status"),
-        F.lit(seen_at).alias("resolved_at"), F.lit(batch_id).cast("bigint").alias("resolved_batch_id"),
+        F.col("replay_of").alias("dlq_id"),
+        *common,
+        F.lit(None).cast("string").alias("error_code"),
+        F.lit(None).cast("string").alias("error_detail"),
+        F.lit(None).cast("array<string>").alias("violations"),
+        F.lit("replayed").alias("new_status"),
+        F.lit(seen_at).alias("resolved_at"),
+        F.lit(batch_id).cast("bigint").alias("resolved_batch_id"),
     )
     latest = Window.partitionBy("dlq_id").orderBy(F.col("replay_position").desc())
     return rejected.unionByName(resolved).withColumn("_r", F.row_number().over(latest)).where("_r = 1").drop("_r")
@@ -384,7 +437,11 @@ def process_batch(ctx: SinkContext, batch_df: DataFrame, batch_id: int) -> dict 
         if s["input_rows"] == 0:
             return None
         offsets: dict[str, dict[str, list[int]]] = {}
-        for row in decoded.groupBy("kafka_topic", "kafka_partition").agg(F.min("kafka_offset"), F.max("kafka_offset")).collect():
+        for row in (
+            decoded.groupBy("kafka_topic", "kafka_partition")
+            .agg(F.min("kafka_offset"), F.max("kafka_offset"))
+            .collect()
+        ):
             offsets.setdefault(row[0], {})[str(row[1])] = [int(row[2]), int(row[3])]
         lap("decode")
 
@@ -401,12 +458,18 @@ def process_batch(ctx: SinkContext, batch_df: DataFrame, batch_id: int) -> dict 
         if s["valid_rows"]:
             planned = plan(ctx, decoded, batch_id, watermark_before, int(s["min_ts"]), int(s["max_ts"]))
             planned = planned.persist(StorageLevel.MEMORY_AND_DISK)
-            for row in planned.groupBy("source_table", "apply_outcome", "contract_name", "contract_version", "is_late").count().collect():
+            for row in (
+                planned.groupBy("source_table", "apply_outcome", "contract_name", "contract_version", "is_late")
+                .count()
+                .collect()
+            ):
                 table, outcome, contract, version, late, count = row
                 outcome_counts[outcome] = outcome_counts.get(outcome, 0) + count
                 per_table.setdefault(table, {})[outcome] = per_table.get(table, {}).get(outcome, 0) + count
                 if outcome != "duplicate":
-                    versions.setdefault(contract, {})[str(version)] = versions.get(contract, {}).get(str(version), 0) + count
+                    versions.setdefault(contract, {})[str(version)] = (
+                        versions.get(contract, {}).get(str(version), 0) + count
+                    )
                     late_rows += count if late else 0
             watermark_after = max(watermark_before, int(s["max_ts"]) - ctx.settings.allowed_lateness_ms)
             lap("plan")
@@ -415,7 +478,9 @@ def process_batch(ctx: SinkContext, batch_df: DataFrame, batch_id: int) -> dict 
                 contract = ctx.registry.current(name)
                 if not per_table.get(contract.source_table, {}).get("applied"):
                     continue
-                applied = planned.where((F.col("source_table") == contract.source_table) & (F.col("apply_outcome") == "applied"))
+                applied = planned.where(
+                    (F.col("source_table") == contract.source_table) & (F.col("apply_outcome") == "applied")
+                )
                 view = f"lakeflow_silver_src_{name}"
                 _silver_source(ctx, applied, name, batch_id).createOrReplaceTempView(view)
                 sql = merge_silver_sql(ctx, name, view)
@@ -430,9 +495,12 @@ def process_batch(ctx: SinkContext, batch_df: DataFrame, batch_id: int) -> dict 
 
         if planned is not None:
             if outcome_counts.get("applied"):
-                q = planned.where(F.col("apply_outcome") == "applied").select(
-                    (F.lit(commit_ms) - F.col("source_ts_ms")).alias("f")
-                ).agg(F.percentile_approx("f", [0.5, 0.95], 10000).alias("p"), F.max("f").alias("m")).first()
+                q = (
+                    planned.where(F.col("apply_outcome") == "applied")
+                    .select((F.lit(commit_ms) - F.col("source_ts_ms")).alias("f"))
+                    .agg(F.percentile_approx("f", [0.5, 0.95], 10000).alias("p"), F.max("f").alias("m"))
+                    .first()
+                )
                 freshness = (int(q["p"][0]), int(q["p"][1]), int(q["m"]))
             bronze = _bronze_rows(ctx, planned, batch_id, committed_at)
             lo, hi = int(s["min_ts"]), int(s["max_ts"])
@@ -488,9 +556,12 @@ def process_batch(ctx: SinkContext, batch_df: DataFrame, batch_id: int) -> dict 
             "added_files_bytes": sum(v["added_files_bytes"] for v in snapshots.values()),
         }
         columns = [c for c, _ in T.BATCH_COLUMNS]
-        ctx.spark.createDataFrame([tuple(record[c] for c in columns)], T.ddl_columns(T.BATCH_COLUMNS).replace("\n", " ")) \
-            .createOrReplaceTempView("lakeflow_batch_src")
-        updates = ", ".join(f"{c} = s.{c}" for c in columns if c not in ("pipeline", "stream_epoch", "batch_id", "attempts"))
+        ctx.spark.createDataFrame(
+            [tuple(record[c] for c in columns)], T.ddl_columns(T.BATCH_COLUMNS).replace("\n", " ")
+        ).createOrReplaceTempView("lakeflow_batch_src")
+        updates = ", ".join(
+            f"{c} = s.{c}" for c in columns if c not in ("pipeline", "stream_epoch", "batch_id", "attempts")
+        )
         sql = BATCH_MERGE.format(table=ctx.table(T.BATCH_TABLE), view="lakeflow_batch_src", updates=updates)
         _with_retries(ctx, "batch_record", lambda: ctx.spark.sql(sql))
 
@@ -514,9 +585,11 @@ def _publish(ctx: SinkContext, record: dict) -> None:
         return
     payload = {k: (v.isoformat() if isinstance(v, datetime) else v) for k, v in record.items()}
     try:
-        ctx.spark.createDataFrame([(f"{record['stream_epoch']}:{record['batch_id']}", json.dumps(payload))], "key string, value string") \
-            .write.format("kafka").option("kafka.bootstrap.servers", ctx.settings.kafka_bootstrap) \
-            .option("topic", ctx.settings.ops_topic).save()
+        ctx.spark.createDataFrame(
+            [(f"{record['stream_epoch']}:{record['batch_id']}", json.dumps(payload))], "key string, value string"
+        ).write.format("kafka").option("kafka.bootstrap.servers", ctx.settings.kafka_bootstrap).option(
+            "topic", ctx.settings.ops_topic
+        ).save()
     except Exception:  # noqa: BLE001 - the ops notification is best effort; Iceberg holds the durable record
         log.exception("could not publish batch record to %s", ctx.settings.ops_topic)
 

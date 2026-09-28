@@ -52,8 +52,13 @@ class AppContext:
 def build_context(settings: Settings) -> AppContext:
     clients = Clients(settings)
     broadcaster = Broadcaster()
-    tracer = Tracer(settings.kafka_bootstrap, settings.cdc_topics + (settings.replay_topic,), settings.ops_topic,
-                    settings.heartbeat_topic, broadcaster)
+    tracer = Tracer(
+        settings.kafka_bootstrap,
+        settings.cdc_topics + (settings.replay_topic,),
+        settings.ops_topic,
+        settings.heartbeat_topic,
+        broadcaster,
+    )
     store = ControlStore(clients)
     monitor = Monitor(settings, clients, tracer, store)
     return AppContext(settings, clients, store, tracer, monitor, broadcaster)

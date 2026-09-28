@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Turn CI evidence into GitHub annotations (readable via the check-runs API without log access).
 
-    python scripts/ci_annotate.py junit <report.xml> [title]
-    python scripts/ci_annotate.py lines <level> <title> < text
-    python scripts/ci_annotate.py compose [--profile 8gb]
+python scripts/ci_annotate.py junit <report.xml> [title]
+python scripts/ci_annotate.py lines <level> <title> < text
+python scripts/ci_annotate.py compose [--profile 8gb]
 """
 
 from __future__ import annotations
@@ -60,12 +60,15 @@ def compose(profile: str) -> None:
     for item in items:
         service, state, health, code = item["Service"], item.get("State"), item.get("Health"), item.get("ExitCode")
         summary.append(f"{service}: {state} {health or ''} exit={code}")
-        bad = state in ("exited", "dead", "restarting") and not (state == "exited" and code == 0) or health == "unhealthy"
+        bad = (
+            state in ("exited", "dead", "restarting") and not (state == "exited" and code == 0) or health == "unhealthy"
+        )
         level = "error" if bad else "warning"
         if emitted[level] >= 9:
             continue
-        logs = subprocess.run(base + ["logs", "--no-color", "--tail", "60", service], cwd=ROOT, capture_output=True,
-                              text=True).stdout
+        logs = subprocess.run(
+            base + ["logs", "--no-color", "--tail", "60", service], cwd=ROOT, capture_output=True, text=True
+        ).stdout
         if bad or service in ("spark", "connect", "api", "trino", "iceberg-rest"):
             emit(level, f"{service} logs ({state}/{health})", logs)
             emitted[level] += 1

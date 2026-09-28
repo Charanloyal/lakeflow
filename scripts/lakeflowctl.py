@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """LakeFlow developer CLI (stdlib only). The Makefile targets are thin wrappers around these commands.
 
-    python scripts/lakeflowctl.py bootstrap [--profile 8gb|16gb]
-    python scripts/lakeflowctl.py up | down [--volumes] | status | doctor | logs <service>
-    python scripts/lakeflowctl.py demo | test | integration-test | benchmark
-    python scripts/lakeflowctl.py migrate | contract promote <name> <version>
+python scripts/lakeflowctl.py bootstrap [--profile 8gb|16gb]
+python scripts/lakeflowctl.py up | down [--volumes] | status | doctor | logs <service>
+python scripts/lakeflowctl.py demo | test | integration-test | benchmark
+python scripts/lakeflowctl.py migrate | contract promote <name> <version>
 """
 
 from __future__ import annotations
@@ -68,7 +68,11 @@ def read_env(path: Path) -> dict[str, str]:
 
 
 def profile_name(args=None) -> str:
-    chosen = getattr(args, "profile", None) or os.environ.get("LAKEFLOW_PROFILE") or read_env(ENV_FILE).get("LAKEFLOW_PROFILE")
+    chosen = (
+        getattr(args, "profile", None)
+        or os.environ.get("LAKEFLOW_PROFILE")
+        or read_env(ENV_FILE).get("LAKEFLOW_PROFILE")
+    )
     chosen = chosen or "16gb"
     if not (ROOT / "infra" / "profiles" / f"{chosen}.env").exists():
         fail(f"unknown profile {chosen!r}; use 8gb or 16gb")
@@ -175,7 +179,9 @@ def wait_for(profile: str, services: list[str], timeout_s: int) -> None:
                     diagnose(profile, name, f"exited with code {exit_code}")
             elif status == "running" and health in ("healthy", "", None):
                 pending.discard(name)
-            elif status in ("exited", "dead") or (status == "running" and health == "unhealthy" and time.time() > deadline - 60):
+            elif status in ("exited", "dead") or (
+                status == "running" and health == "unhealthy" and time.time() > deadline - 60
+            ):
                 diagnose(profile, name, f"is {status}/{health}")
         if pending:
             print(f"  waiting for: {', '.join(sorted(pending))}")
@@ -199,7 +205,9 @@ def cmd_up(args) -> None:
     wait_for(profile, DATA_PLANE if args.data_plane else CORE_SERVICES, args.timeout)
     env = read_env(ENV_FILE)
     print("\nLakeFlow is up (all ports bound to 127.0.0.1):")
-    print(f"  Control plane  http://localhost:{env.get('WEB_PORT', '8080')}   ({env.get('LAKEFLOW_ADMIN_USER')} / see .env)")
+    print(
+        f"  Control plane  http://localhost:{env.get('WEB_PORT', '8080')}   ({env.get('LAKEFLOW_ADMIN_USER')} / see .env)"
+    )
     print("  API docs       http://localhost:8000/api/docs")
     print("  Trino UI       http://localhost:8088      Spark UI http://localhost:4040")
     if "observability" in " ".join(compose(profile)):
@@ -238,8 +246,12 @@ def api_call(method: str, path: str, body: dict | None = None, timeout: float = 
     base = os.environ.get("LAKEFLOW_API_URL", "http://127.0.0.1:8000")
     token = base64.b64encode(f"{env['LAKEFLOW_ADMIN_USER']}:{env['LAKEFLOW_ADMIN_PASSWORD']}".encode()).decode()
     data = None if body is None else json.dumps(body).encode()
-    request = urllib.request.Request(base + path, data=data, method=method,
-                                     headers={"Authorization": f"Basic {token}", "Content-Type": "application/json"})
+    request = urllib.request.Request(
+        base + path,
+        data=data,
+        method=method,
+        headers={"Authorization": f"Basic {token}", "Content-Type": "application/json"},
+    )
     with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310 - local API URL
         return json.loads(response.read() or b"{}")
 
@@ -295,7 +307,9 @@ def cmd_demo(args) -> None:
             break
         time.sleep(2)
     print("5/5 verify: exactly one silver row and one bronze row per change event")
-    checks = api_call("POST", "/api/quality/run", {"checks": ["orders.primary_key_unique", "bronze.event_id_unique"]}, timeout=120)
+    checks = api_call(
+        "POST", "/api/quality/run", {"checks": ["orders.primary_key_unique", "bronze.event_id_unique"]}, timeout=120
+    )
     for result in checks.get("results", []):
         print(f"    {result['check_id']:<32} {result['status']:<6} value={result['value']}")
     print("\nOpen http://localhost:8080 and use 'Guided demo' to replay this walkthrough visually.")
@@ -320,17 +334,49 @@ def cmd_integration_test(args) -> None:
 
 def cmd_benchmark(args) -> None:
     profile = profile_name(args)
-    run(compose(profile, "--profile", "tools", "run", "--rm", "tools", "python", "benchmarks/run.py",
-                "--profile", args.bench_profile, "--iterations", str(args.iterations), "--events", str(args.events),
-                "--seed", str(args.seed)))
+    run(
+        compose(
+            profile,
+            "--profile",
+            "tools",
+            "run",
+            "--rm",
+            "tools",
+            "python",
+            "benchmarks/run.py",
+            "--profile",
+            args.bench_profile,
+            "--iterations",
+            str(args.iterations),
+            "--events",
+            str(args.events),
+            "--seed",
+            str(args.seed),
+        )
+    )
 
 
 def cmd_migrate(args) -> None:
     profile = profile_name(args)
     for path in sorted((ROOT / "platform" / "postgres" / "migrations").glob("*.sql")):
         print(f"applying {path.name}")
-        run(compose(profile, "exec", "-T", "postgres", "psql", "-v", "ON_ERROR_STOP=1", "-U", "postgres", "-d", "lakeflow",
-                    "-f", f"/migrations/{path.name}"))
+        run(
+            compose(
+                profile,
+                "exec",
+                "-T",
+                "postgres",
+                "psql",
+                "-v",
+                "ON_ERROR_STOP=1",
+                "-U",
+                "postgres",
+                "-d",
+                "lakeflow",
+                "-f",
+                f"/migrations/{path.name}",
+            )
+        )
 
 
 def cmd_contract(args) -> None:

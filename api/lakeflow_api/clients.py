@@ -30,7 +30,9 @@ class Clients:
 
     @contextmanager
     def control(self):
-        with psycopg.connect(self.settings.control_dsn, connect_timeout=3, row_factory=dict_row, autocommit=True) as conn:
+        with psycopg.connect(
+            self.settings.control_dsn, connect_timeout=3, row_factory=dict_row, autocommit=True
+        ) as conn:
             yield conn
 
     # --------------------------------------------------------------------------------------------- Trino
@@ -74,8 +76,14 @@ class Clients:
     # --------------------------------------------------------------------------------------------- Kafka
     def producer(self) -> Producer:
         if self._producer is None:
-            self._producer = Producer({"bootstrap.servers": self.settings.kafka_bootstrap, "acks": "all",
-                                       "enable.idempotence": True, "client.id": "lakeflow-api"})
+            self._producer = Producer(
+                {
+                    "bootstrap.servers": self.settings.kafka_bootstrap,
+                    "acks": "all",
+                    "enable.idempotence": True,
+                    "client.id": "lakeflow-api",
+                }
+            )
         return self._producer
 
     def produce(self, topic: str, key: bytes | None, value: bytes | None, headers: dict[str, str]) -> None:
@@ -86,8 +94,13 @@ class Clients:
             raise RuntimeError(f"{remaining} Kafka messages were not delivered within 10s")
 
     def end_offsets(self, topics: tuple[str, ...]) -> dict[str, dict[str, int]]:
-        consumer = Consumer({"bootstrap.servers": self.settings.kafka_bootstrap, "group.id": "lakeflow-api-probe",
-                             "enable.auto.commit": False})
+        consumer = Consumer(
+            {
+                "bootstrap.servers": self.settings.kafka_bootstrap,
+                "group.id": "lakeflow-api-probe",
+                "enable.auto.commit": False,
+            }
+        )
         try:
             metadata = consumer.list_topics(timeout=5)
             out: dict[str, dict[str, int]] = {}
@@ -103,8 +116,13 @@ class Clients:
 
     def fetch_record(self, topic: str, partition: int, offset: int) -> tuple[bytes | None, bytes | None]:
         """Read one exact record (used to redeliver a real event verbatim)."""
-        consumer = Consumer({"bootstrap.servers": self.settings.kafka_bootstrap, "group.id": "lakeflow-api-fetch",
-                             "enable.auto.commit": False})
+        consumer = Consumer(
+            {
+                "bootstrap.servers": self.settings.kafka_bootstrap,
+                "group.id": "lakeflow-api-fetch",
+                "enable.auto.commit": False,
+            }
+        )
         try:
             consumer.assign([TopicPartition(topic, partition, offset)])
             deadline = time.time() + 10

@@ -19,10 +19,21 @@ def _now() -> datetime:
 
 
 def envelope(op: str, lsn: int, ts_ms: int, before=None, after=None, table="orders", tx_id=0) -> bytes:
-    source = {"version": "lakeflow-recovery-lab", "connector": "postgresql", "name": "lakeflow", "db": "lakeflow",
-              "schema": "shop", "table": table, "lsn": lsn, "txId": tx_id, "ts_ms": ts_ms, "snapshot": "false"}
-    return json.dumps({"before": before, "after": after, "source": source, "op": op,
-                       "ts_ms": int(time.time() * 1000)}).encode()
+    source = {
+        "version": "lakeflow-recovery-lab",
+        "connector": "postgresql",
+        "name": "lakeflow",
+        "db": "lakeflow",
+        "schema": "shop",
+        "table": table,
+        "lsn": lsn,
+        "txId": tx_id,
+        "ts_ms": ts_ms,
+        "snapshot": "false",
+    }
+    return json.dumps(
+        {"before": before, "after": after, "source": source, "op": op, "ts_ms": int(time.time() * 1000)}
+    ).encode()
 
 
 def _headers(action_id: str, kind: str) -> dict[str, str]:
@@ -31,8 +42,11 @@ def _headers(action_id: str, kind: str) -> dict[str, str]:
 
 def inject_duplicates(ctx, action_id: str, count: int) -> dict:
     """Redeliver real events byte-for-byte, as Debezium does after a connector restart."""
-    candidates = [e for e in ctx.tracer.recent(500, topic=ORDERS_TOPIC)
-                  if not e.get("injection_id") and not e.get("tombstone") and e.get("lsn") is not None][:count]
+    candidates = [
+        e
+        for e in ctx.tracer.recent(500, topic=ORDERS_TOPIC)
+        if not e.get("injection_id") and not e.get("tombstone") and e.get("lsn") is not None
+    ][:count]
     if not candidates:
         rows, _ = ctx.clients.trino(
             "SELECT kafka_topic AS topic, kafka_partition AS partition, kafka_offset AS offset FROM lakehouse.bronze.cdc_events "  # noqa: S608
@@ -56,8 +70,15 @@ def inject_malformed(ctx, action_id: str, count: int, kind: str) -> dict:
         order_id = str(uuid.uuid4())
         key = json.dumps({"order_id": order_id}).encode()
         now_ms = int(time.time() * 1000)
-        row = {"order_id": order_id, "customer_id": str(uuid.uuid4()), "status": "PENDING", "amount": "10.00",
-               "currency": "USD", "created_at": _now().isoformat(), "updated_at": _now().isoformat()}
+        row = {
+            "order_id": order_id,
+            "customer_id": str(uuid.uuid4()),
+            "status": "PENDING",
+            "amount": "10.00",
+            "currency": "USD",
+            "created_at": _now().isoformat(),
+            "updated_at": _now().isoformat(),
+        }
         if kind == "invalid_json":
             value = b'{"op": "c", "source": {"lsn": 1, '
         elif kind == "contract_violation":
@@ -69,8 +90,12 @@ def inject_malformed(ctx, action_id: str, count: int, kind: str) -> dict:
             key = json.dumps({"order_id": str(uuid.uuid4())}).encode()
         ctx.clients.produce(ORDERS_TOPIC, key, value, _headers(action_id, f"malformed:{kind}"))
         produced.append(order_id)
-    expected = {"invalid_json": "MALFORMED_JSON", "contract_violation": "CONTRACT_VIOLATION",
-                "unsupported_op": "UNSUPPORTED_OP", "key_mismatch": "KEY_MISMATCH"}[kind]
+    expected = {
+        "invalid_json": "MALFORMED_JSON",
+        "contract_violation": "CONTRACT_VIOLATION",
+        "unsupported_op": "UNSUPPORTED_OP",
+        "key_mismatch": "KEY_MISMATCH",
+    }[kind]
     return {"produced": len(produced), "expected": f"DLQ with error_code {expected}; stream keeps running"}
 
 
@@ -103,7 +128,7 @@ def request_control(ctx, action_id: str, action: str, actor: str) -> dict:
     notes = {
         "crash_now": "Spark exits immediately; Docker restarts it and it resumes from the checkpoint",
         "crash_after_commit": "armed: after the next non-empty batch commits to Iceberg, Spark exits before the "
-                              "checkpoint commit; the replayed batch must not create duplicates",
+        "checkpoint commit; the replayed batch must not create duplicates",
     }
     return {"control_file": f"requests/{action_id}.json", "expected": notes[action]}
 
@@ -122,7 +147,9 @@ def run(ctx, body, actor: str) -> dict:
         raise HTTPException(403, "Recovery Lab is disabled (LAKEFLOW_RECOVERY_LAB_ENABLED=false)")
     allowed, retry = ctx.recovery_limiter.allow(actor)
     if not allowed:
-        raise HTTPException(429, f"Recovery Lab rate limit; retry in {retry:.0f}s", headers={"Retry-After": str(int(retry) + 1)})
+        raise HTTPException(
+            429, f"Recovery Lab rate limit; retry in {retry:.0f}s", headers={"Retry-After": str(int(retry) + 1)}
+        )
     action_id = f"{body.action[:8]}-{uuid.uuid4().hex[:10]}"
     status = "done"
     if body.action == "inject_duplicates":
@@ -138,12 +165,23 @@ def run(ctx, body, actor: str) -> dict:
         detail = {"expected": "Debezium resumes from its last flushed LSN; re-emitted events are counted as duplicates"}
     else:
         detail = apply_migration(ctx)
-    record = {"id": action_id, "action": body.action, "actor": actor, "requested_at": _now(), "status": status,
-              "detail": {**detail, "count": body.count, "kind": body.kind if body.action == "inject_malformed" else None}}
+    record = {
+        "id": action_id,
+        "action": body.action,
+        "actor": actor,
+        "requested_at": _now(),
+        "status": status,
+        "detail": {**detail, "count": body.count, "kind": body.kind if body.action == "inject_malformed" else None},
+    }
     try:
         ctx.store.audit(actor, f"recovery.{body.action}", record["detail"], action_id=action_id, status=status)
-        ctx.store.open_incident("recovery-lab", "info", f"Operator action: {body.action}", json.dumps(record["detail"], default=str),
-                                f"Recovery Lab ({actor})")
+        ctx.store.open_incident(
+            "recovery-lab",
+            "info",
+            f"Operator action: {body.action}",
+            json.dumps(record["detail"], default=str),
+            f"Recovery Lab ({actor})",
+        )
     except Exception:  # noqa: BLE001 - the action already happened; auditing failure is logged by the store
         pass
     return record
@@ -153,9 +191,16 @@ def history(ctx) -> dict:
     actions = []
     try:
         for row in ctx.store.audit_entries("recovery.", 30):
-            actions.append({"id": row.get("action_id") or str(row["id"]), "action": row["action"].removeprefix("recovery."),
-                            "actor": row["actor"], "requested_at": row["at"], "status": row.get("status") or "done",
-                            "detail": row["detail"]})
+            actions.append(
+                {
+                    "id": row.get("action_id") or str(row["id"]),
+                    "action": row["action"].removeprefix("recovery."),
+                    "actor": row["actor"],
+                    "requested_at": row["at"],
+                    "status": row.get("status") or "done",
+                    "detail": row["detail"],
+                }
+            )
     except Exception:  # noqa: BLE001
         pass
     acks = []

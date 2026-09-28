@@ -346,9 +346,13 @@ def check_backward_compatible(old: Contract, new: Contract) -> list[str]:
             problems.append(f"'{name}' pattern changed")
         if new_spec.fmt is not None and new_spec.fmt != old_spec.fmt:
             problems.append(f"'{name}' format changed")
-        if new_spec.max_length is not None and (old_spec.max_length is None or new_spec.max_length < old_spec.max_length):
+        if new_spec.max_length is not None and (
+            old_spec.max_length is None or new_spec.max_length < old_spec.max_length
+        ):
             problems.append(f"'{name}' maxLength reduced")
-        if new_spec.min_length is not None and (old_spec.min_length is None or new_spec.min_length > old_spec.min_length):
+        if new_spec.min_length is not None and (
+            old_spec.min_length is None or new_spec.min_length > old_spec.min_length
+        ):
             problems.append(f"'{name}' minLength increased")
         if old_spec.decimal and new_spec.decimal:
             if new_spec.decimal[1] != old_spec.decimal[1] or new_spec.decimal[0] < old_spec.decimal[0]:
@@ -388,7 +392,9 @@ class ContractRegistry:
             for older in previous:
                 problems = check_backward_compatible(older, newer)
                 if problems:
-                    raise ContractError(f"{name} v{newer.version} is not backward compatible with v{older.version}: {problems}")
+                    raise ContractError(
+                        f"{name} v{newer.version} is not backward compatible with v{older.version}: {problems}"
+                    )
 
     @property
     def names(self) -> list[str]:

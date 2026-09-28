@@ -38,9 +38,13 @@ def eventually(fn, timeout: float = 240, interval: float = 2, what: str = "condi
 
 
 def trino_rows(sql: str, params=None) -> list[dict]:
-    conn = trino.dbapi.connect(host=os.environ.get("LAKEFLOW_TRINO_HOST", "trino"),
-                               port=int(os.environ.get("LAKEFLOW_TRINO_PORT", "8080")),
-                               user="lakeflow-tests", catalog="lakehouse", schema="silver")
+    conn = trino.dbapi.connect(
+        host=os.environ.get("LAKEFLOW_TRINO_HOST", "trino"),
+        port=int(os.environ.get("LAKEFLOW_TRINO_PORT", "8080")),
+        user="lakeflow-tests",
+        catalog="lakehouse",
+        schema="silver",
+    )
     try:
         cursor = conn.cursor()
         if params:
@@ -77,13 +81,19 @@ def silver_order(order_id: str) -> dict | None:
 
 
 def bronze_events(order_id: str) -> list[dict]:
-    return trino_rows("SELECT * FROM lakehouse.bronze.cdc_events WHERE source_table = 'shop.orders' AND primary_key = ? "
-                      "ORDER BY source_lsn", [order_id])
+    return trino_rows(
+        "SELECT * FROM lakehouse.bronze.cdc_events WHERE source_table = 'shop.orders' AND primary_key = ? "
+        "ORDER BY source_lsn",
+        [order_id],
+    )
 
 
 def wait_visible(order_id: str, predicate=lambda row: True, timeout: float = 240) -> dict:
-    return eventually(lambda: (row := silver_order(order_id)) and predicate(row) and row, timeout=timeout,
-                      what=f"order {order_id} in silver")
+    return eventually(
+        lambda: (row := silver_order(order_id)) and predicate(row) and row,
+        timeout=timeout,
+        what=f"order {order_id} in silver",
+    )
 
 
 def marker(timeout: float = 240) -> str:
@@ -100,7 +110,9 @@ def produce(value: bytes | None, key: bytes | None, headers: dict[str, str], top
 
 
 def fetch(topic: str, partition: int, offset: int) -> tuple[bytes, bytes]:
-    consumer = Consumer({"bootstrap.servers": KAFKA, "group.id": f"tests-{uuid.uuid4().hex[:6]}", "enable.auto.commit": False})
+    consumer = Consumer(
+        {"bootstrap.servers": KAFKA, "group.id": f"tests-{uuid.uuid4().hex[:6]}", "enable.auto.commit": False}
+    )
     try:
         consumer.assign([TopicPartition(topic, partition, offset)])
         deadline = time.time() + 20
@@ -114,8 +126,18 @@ def fetch(topic: str, partition: int, offset: int) -> tuple[bytes, bytes]:
 
 
 def envelope(op, lsn, ts_ms, before=None, after=None) -> bytes:
-    source = {"version": "tests", "connector": "postgresql", "name": "lakeflow", "db": "lakeflow", "schema": "shop",
-              "table": "orders", "lsn": lsn, "txId": 1, "ts_ms": ts_ms, "snapshot": "false"}
+    source = {
+        "version": "tests",
+        "connector": "postgresql",
+        "name": "lakeflow",
+        "db": "lakeflow",
+        "schema": "shop",
+        "table": "orders",
+        "lsn": lsn,
+        "txId": 1,
+        "ts_ms": ts_ms,
+        "snapshot": "false",
+    }
     return json.dumps({"before": before, "after": after, "source": source, "op": op, "ts_ms": ts_ms}).encode()
 
 

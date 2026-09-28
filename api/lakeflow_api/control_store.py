@@ -43,7 +43,9 @@ class ControlStore:
 
     def resolve_incidents(self, component: str) -> None:
         with self.clients.control() as conn:
-            conn.execute("UPDATE incidents SET resolved_at = now() WHERE component = %s AND resolved_at IS NULL", (component,))
+            conn.execute(
+                "UPDATE incidents SET resolved_at = now() WHERE component = %s AND resolved_at IS NULL", (component,)
+            )
 
     def incidents(self, limit: int = 20) -> list[dict]:
         with self.clients.control() as conn:
@@ -58,9 +60,11 @@ class ControlStore:
 
     def audit_entries(self, prefix: str = "", limit: int = 30) -> list[dict]:
         with self.clients.control() as conn:
-            return list(conn.execute(
-                "SELECT * FROM audit_log WHERE action LIKE %s ORDER BY at DESC LIMIT %s", (prefix + "%", limit)
-            ).fetchall())
+            return list(
+                conn.execute(
+                    "SELECT * FROM audit_log WHERE action LIKE %s ORDER BY at DESC LIMIT %s", (prefix + "%", limit)
+                ).fetchall()
+            )
 
     def record_mutation(self, actor: str, table: str, key: str, op: str, txid, commit_lsn, detail: dict) -> None:
         with self.clients.control() as conn:

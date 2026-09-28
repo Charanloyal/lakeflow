@@ -87,14 +87,25 @@ class FakeStore:
 
 def make_client(tmp_path, **overrides):
     values = dict(
-        pg_dsn="postgresql://fake", control_dsn="postgresql://fake", kafka_bootstrap="fake:9092",
-        connect_url="http://fake", trino_host="fake", trino_port=8080, prometheus_url="http://fake",
-        spark_metrics_url="http://fake/metrics", checkpoint_dir=str(tmp_path / "checkpoints"),
-        control_dir=str(tmp_path / "control"), contracts_dir=str(ROOT / "contracts"), adr_dir=str(ROOT / "docs" / "adr"),
-        benchmark_dir=str(tmp_path / "results"), migrations_dir=str(ROOT / "platform" / "postgres" / "migrations"),
+        pg_dsn="postgresql://fake",
+        control_dsn="postgresql://fake",
+        kafka_bootstrap="fake:9092",
+        connect_url="http://fake",
+        trino_host="fake",
+        trino_port=8080,
+        prometheus_url="http://fake",
+        spark_metrics_url="http://fake/metrics",
+        checkpoint_dir=str(tmp_path / "checkpoints"),
+        control_dir=str(tmp_path / "control"),
+        contracts_dir=str(ROOT / "contracts"),
+        adr_dir=str(ROOT / "docs" / "adr"),
+        benchmark_dir=str(tmp_path / "results"),
+        migrations_dir=str(ROOT / "platform" / "postgres" / "migrations"),
         users={ADMIN[0]: (ADMIN[1], "admin"), VIEWER[0]: (VIEWER[1], "viewer")},
-        session_secret="test-session-secret-0123456789", recovery_lab_enabled=True,
-        cors_origins=("http://localhost:3000",), start_background=False,
+        session_secret="test-session-secret-0123456789",
+        recovery_lab_enabled=True,
+        cors_origins=("http://localhost:3000",),
+        start_background=False,
     )
     values.update(overrides)
     settings = Settings(**values)
@@ -137,9 +148,16 @@ def test_viewer_cannot_mutate(client):
     assert response.status_code == 403
 
 
-@pytest.mark.parametrize("payload", [
-    {"amount": "-1.00"}, {"amount": "1.234"}, {"currency": "JPY"}, {"status": "SHIPPED_TO_MARS"}, {"unexpected": 1},
-])
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"amount": "-1.00"},
+        {"amount": "1.234"},
+        {"currency": "JPY"},
+        {"status": "SHIPPED_TO_MARS"},
+        {"unexpected": 1},
+    ],
+)
 def test_mutation_input_validation(client, payload):
     assert client.post("/api/demo/orders", json=payload, headers=basic(ADMIN)).status_code == 422
 
@@ -163,8 +181,9 @@ def test_session_cookie_requires_csrf_header_for_writes(client):
     assert client.get("/api/auth/me").json()["user"] == "admin"
     no_csrf = client.post("/api/recovery/actions", json={"action": "inject_malformed", "count": 1})
     assert no_csrf.status_code == 403
-    with_csrf = client.post("/api/recovery/actions", json={"action": "inject_malformed", "count": 1},
-                            headers={"X-LakeFlow-CSRF": "1"})
+    with_csrf = client.post(
+        "/api/recovery/actions", json={"action": "inject_malformed", "count": 1}, headers={"X-LakeFlow-CSRF": "1"}
+    )
     assert with_csrf.status_code == 202
 
 
@@ -175,10 +194,14 @@ def test_login_rejects_bad_password(client):
 def test_recovery_injection_is_labelled_and_rate_limited(tmp_path):
     client, ctx = make_client(tmp_path)
     for _ in range(10):
-        response = client.post("/api/recovery/actions", json={"action": "inject_malformed", "kind": "invalid_json"},
-                               headers=basic(ADMIN))
+        response = client.post(
+            "/api/recovery/actions", json={"action": "inject_malformed", "kind": "invalid_json"}, headers=basic(ADMIN)
+        )
         assert response.status_code == 202
-    assert client.post("/api/recovery/actions", json={"action": "inject_malformed"}, headers=basic(ADMIN)).status_code == 429
+    assert (
+        client.post("/api/recovery/actions", json={"action": "inject_malformed"}, headers=basic(ADMIN)).status_code
+        == 429
+    )
     assert all("lakeflow-injection-id" in headers for _, _, _, headers in ctx.clients.produced)
 
 
@@ -195,9 +218,15 @@ def test_crash_request_writes_control_file(tmp_path):
     assert list((tmp_path / "control" / "requests").glob("*.json"))
 
 
-@pytest.mark.parametrize("path", [
-    "/api/events?op=x", "/api/events?limit=5000", "/api/trace/orders/bad;key", "/api/lineage/impact?dataset=a%20b",
-])
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/events?op=x",
+        "/api/events?limit=5000",
+        "/api/trace/orders/bad;key",
+        "/api/lineage/impact?dataset=a%20b",
+    ],
+)
 def test_query_validation(client, path):
     assert client.get(path, headers=basic(VIEWER)).status_code == 422
 
@@ -216,9 +245,13 @@ def test_benchmarks_empty_directory(client):
 
 
 def test_cors_allows_only_configured_origins(client):
-    ok = client.options("/api/health", headers={"Origin": "http://localhost:3000", "Access-Control-Request-Method": "GET"})
+    ok = client.options(
+        "/api/health", headers={"Origin": "http://localhost:3000", "Access-Control-Request-Method": "GET"}
+    )
     assert ok.headers.get("access-control-allow-origin") == "http://localhost:3000"
-    bad = client.options("/api/health", headers={"Origin": "https://evil.example", "Access-Control-Request-Method": "GET"})
+    bad = client.options(
+        "/api/health", headers={"Origin": "https://evil.example", "Access-Control-Request-Method": "GET"}
+    )
     assert "access-control-allow-origin" not in bad.headers
 
 

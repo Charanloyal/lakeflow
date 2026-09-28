@@ -82,9 +82,16 @@ class AdrTests(unittest.TestCase):
 class QualityTests(unittest.TestCase):
     def test_checks_cover_every_contract(self):
         checks = {c.check_id: c for c in build_checks(REGISTRY)}
-        for expected in ("orders.primary_key_unique", "orders.status_enum", "orders.customer_id_references_customers",
-                         "orders.source_reconciliation", "customers.source_reconciliation", "orders.freshness_p95",
-                         "bronze.event_id_unique", "dlq.open_records"):
+        for expected in (
+            "orders.primary_key_unique",
+            "orders.status_enum",
+            "orders.customer_id_references_customers",
+            "orders.source_reconciliation",
+            "customers.source_reconciliation",
+            "orders.freshness_p95",
+            "bronze.event_id_unique",
+            "dlq.open_records",
+        ):
             self.assertIn(expected, checks)
         recon = checks["customers.source_reconciliation"].sql
         self.assertNotIn("email", recon, "PII columns must never be compared in plain SQL")
@@ -112,11 +119,26 @@ class TablesTests(unittest.TestCase):
 
 class BenchmarkTests(unittest.TestCase):
     def doc(self):
-        iteration = {"events_expected": 100, "events_observed": 100, "duplicates_observed": 0, "dlq_events": 0,
-                     "reconciliation_mismatches": 0, "first_source_ms": 0, "last_commit_ms": 10_000,
-                     "latency_ms": [100, 200, 300, 400]}
-        return {"schema_version": 1, "run_id": "r", "created_at": "2026-09-25T00:00:00Z", "git_sha": "abc",
-                "environment": {}, "config": {}, "workload": {}, "iterations": [iteration, dict(iteration)]}
+        iteration = {
+            "events_expected": 100,
+            "events_observed": 100,
+            "duplicates_observed": 0,
+            "dlq_events": 0,
+            "reconciliation_mismatches": 0,
+            "first_source_ms": 0,
+            "last_commit_ms": 10_000,
+            "latency_ms": [100, 200, 300, 400],
+        }
+        return {
+            "schema_version": 1,
+            "run_id": "r",
+            "created_at": "2026-09-25T00:00:00Z",
+            "git_sha": "abc",
+            "environment": {},
+            "config": {},
+            "workload": {},
+            "iterations": [iteration, dict(iteration)],
+        }
 
     def test_summary_is_recomputed_from_raw_samples(self):
         summary = benchmark.summarize_result(self.doc())

@@ -36,8 +36,14 @@ def _customer(conn, customer_id):
 
 
 def _result(order_id, op, txid, lsn, note) -> dict:
-    return {"order_id": str(order_id), "op": op, "txid": txid, "commit_lsn": lsn,
-            "committed_at": datetime.now(timezone.utc), "note": note}
+    return {
+        "order_id": str(order_id),
+        "op": op,
+        "txid": txid,
+        "commit_lsn": lsn,
+        "committed_at": datetime.now(timezone.utc),
+        "note": note,
+    }
 
 
 def _finish(ctx, conn, actor, order_id, op, txid, detail):
@@ -46,8 +52,13 @@ def _finish(ctx, conn, actor, order_id, op, txid, detail):
         ctx.store.record_mutation(actor, "orders", str(order_id), op, txid, lsn, detail)
     except Exception:  # noqa: BLE001 - the trace still works from Kafka/bronze evidence
         pass
-    return _result(order_id, op, txid, lsn,
-                   "commit_lsn is the WAL position after commit; Debezium's source.lsn is the change record's own LSN")
+    return _result(
+        order_id,
+        op,
+        txid,
+        lsn,
+        "commit_lsn is the WAL position after commit; Debezium's source.lsn is the change record's own LSN",
+    )
 
 
 def create_order(ctx, body, actor: str) -> dict:
@@ -55,10 +66,15 @@ def create_order(ctx, body, actor: str) -> dict:
         with ctx.clients.source() as conn:
             with conn.transaction():
                 customer = _customer(conn, body.customer_id)
-                columns, values = ["customer_id", "status", "amount", "currency"], [customer, body.status, body.amount, body.currency]
+                columns, values = (
+                    ["customer_id", "status", "amount", "currency"],
+                    [customer, body.status, body.amount, body.currency],
+                )
                 if body.channel is not None:
                     if not has_channel(conn):
-                        raise HTTPException(409, "channel needs contract v2: run Recovery Lab 'apply_schema_migration' first")
+                        raise HTTPException(
+                            409, "channel needs contract v2: run Recovery Lab 'apply_schema_migration' first"
+                        )
                     columns.append("channel")
                     values.append(body.channel)
                 row = conn.execute(
@@ -78,7 +94,9 @@ def update_order(ctx, order_id: uuid.UUID, body, actor: str) -> dict:
         with ctx.clients.source() as conn:
             with conn.transaction():
                 if "channel" in changes and not has_channel(conn):
-                    raise HTTPException(409, "channel needs contract v2: run Recovery Lab 'apply_schema_migration' first")
+                    raise HTTPException(
+                        409, "channel needs contract v2: run Recovery Lab 'apply_schema_migration' first"
+                    )
                 assignments = ", ".join(f"{name} = %s" for name in changes)
                 row = conn.execute(
                     f"UPDATE shop.orders SET {assignments} WHERE order_id = %s RETURNING order_id",  # noqa: S608 - allowlisted
@@ -110,7 +128,9 @@ def generate(ctx, count: int, seed: int, actor: str) -> dict:
     counts = {"c": 0, "u": 0, "d": 0}
     statuses = ["PENDING", "PAID", "SHIPPED", "DELIVERED", "CANCELLED"]
     with ctx.clients.source() as conn:
-        customers = [r["customer_id"] for r in conn.execute("SELECT customer_id FROM shop.customers ORDER BY customer_id")]
+        customers = [
+            r["customer_id"] for r in conn.execute("SELECT customer_id FROM shop.customers ORDER BY customer_id")
+        ]
         if not customers:
             raise HTTPException(503, "no customers in the source database")
         conn.commit()
@@ -120,12 +140,20 @@ def generate(ctx, count: int, seed: int, actor: str) -> dict:
                 if roll < 0.6 or not created:
                     row = conn.execute(
                         "INSERT INTO shop.orders (customer_id, status, amount, currency) VALUES (%s, %s, %s, %s) RETURNING order_id",
-                        (rng.choice(customers), "PENDING", Decimal(rng.randint(100, 500_000)) / 100, rng.choice(["USD", "EUR", "GBP", "INR"])),
+                        (
+                            rng.choice(customers),
+                            "PENDING",
+                            Decimal(rng.randint(100, 500_000)) / 100,
+                            rng.choice(["USD", "EUR", "GBP", "INR"]),
+                        ),
                     ).fetchone()
                     created.append(row["order_id"])
                     counts["c"] += 1
                 elif roll < 0.9:
-                    conn.execute("UPDATE shop.orders SET status = %s WHERE order_id = %s", (rng.choice(statuses), rng.choice(created)))
+                    conn.execute(
+                        "UPDATE shop.orders SET status = %s WHERE order_id = %s",
+                        (rng.choice(statuses), rng.choice(created)),
+                    )
                     counts["u"] += 1
                 else:
                     victim = created.pop(rng.randrange(len(created)))
@@ -135,5 +163,11 @@ def generate(ctx, count: int, seed: int, actor: str) -> dict:
         ctx.store.audit(actor, "demo.generate", {"count": count, "seed": seed, **counts})
     except Exception:  # noqa: BLE001
         pass
-    return {"seed": seed, "inserted": counts["c"], "updated": counts["u"], "deleted": counts["d"],
-            "order_ids": [str(o) for o in created][:50], "elapsed_ms": round((time.perf_counter() - started) * 1000, 1)}
+    return {
+        "seed": seed,
+        "inserted": counts["c"],
+        "updated": counts["u"],
+        "deleted": counts["d"],
+        "order_ids": [str(o) for o in created][:50],
+        "elapsed_ms": round((time.perf_counter() - started) * 1000, 1),
+    }

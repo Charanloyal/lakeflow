@@ -6,8 +6,9 @@ import logging
 import uuid
 from pathlib import Path
 
-from lakeflow_core.contracts import load_registry
 from pyspark.sql.streaming import StreamingQueryListener
+
+from lakeflow_core.contracts import load_registry
 
 from .config import Settings
 from .control import ControlChannel

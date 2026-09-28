@@ -27,12 +27,29 @@ class PipelineMetrics:
         self.enabled = enabled and Counter is not None
         if not self.enabled:
             noop = _Noop()
-            for name in ("events", "batches", "retries", "batch_seconds", "last_batch_id", "last_batch_ts",
-                         "freshness_p95", "freshness_p50", "freshness_max", "query_active", "watermark", "file_bytes",
-                         "contract_reloads", "input_rows_per_second", "processed_rows_per_second", "files_written"):
+            for name in (
+                "events",
+                "batches",
+                "retries",
+                "batch_seconds",
+                "last_batch_id",
+                "last_batch_ts",
+                "freshness_p95",
+                "freshness_p50",
+                "freshness_max",
+                "query_active",
+                "watermark",
+                "file_bytes",
+                "contract_reloads",
+                "input_rows_per_second",
+                "processed_rows_per_second",
+                "files_written",
+            ):
                 setattr(self, name, noop)
             return
-        self.events = Counter("lakeflow_stream_events_total", "Change events by table and outcome", ["table", "outcome"])
+        self.events = Counter(
+            "lakeflow_stream_events_total", "Change events by table and outcome", ["table", "outcome"]
+        )
         self.batches = Counter("lakeflow_stream_batches_total", "Micro-batches by result", ["result"])
         self.retries = Counter("lakeflow_stream_commit_retries_total", "Iceberg commit retries", ["stage"])
         self.batch_seconds = Histogram(

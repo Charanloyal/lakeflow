@@ -69,9 +69,14 @@ class Monitor:
             except Exception as exc:  # noqa: BLE001 - a failed probe means "down"
                 status, detail, data = "down", f"{type(exc).__name__}: {str(exc)[:300]}", {}
             results[name] = {
-                "component": name, "label": label, "status": status, "checked_at": _now(),
-                "latency_ms": round((time.perf_counter() - started) * 1000, 1), "detail": detail,
-                "source": PROBE_SOURCES[name], "data": data,
+                "component": name,
+                "label": label,
+                "status": status,
+                "checked_at": _now(),
+                "latency_ms": round((time.perf_counter() - started) * 1000, 1),
+                "detail": detail,
+                "source": PROBE_SOURCES[name],
+                "data": data,
             }
             COMPONENT_UP.labels(component=name).set(1 if status == "healthy" else 0)
         previous = self.snapshot()
@@ -80,8 +85,14 @@ class Monitor:
         for name, result in results.items():
             before = previous.get(name, {}).get("status")
             if result["status"] in ("down", "degraded") and before != result["status"]:
-                self._safe(self.store.open_incident, name, "critical" if result["status"] == "down" else "warning",
-                           f"{result['label']} {result['status']}", result["detail"], result["source"])
+                self._safe(
+                    self.store.open_incident,
+                    name,
+                    "critical" if result["status"] == "down" else "warning",
+                    f"{result['label']} {result['status']}",
+                    result["detail"],
+                    result["source"],
+                )
             elif result["status"] == "healthy" and before in ("down", "degraded"):
                 self._safe(self.store.resolve_incidents, name)
 
@@ -145,7 +156,8 @@ class Monitor:
             self.checkpoint = None
         if self.checkpoint and self.end_offsets:
             self.lag = consumer_lag(
-                {t: p for t, p in self.end_offsets.items() if t in self.settings.cdc_topics}, self.checkpoint.committed_offsets
+                {t: p for t, p in self.end_offsets.items() if t in self.settings.cdc_topics},
+                self.checkpoint.committed_offsets,
             )
             self.lag_as_of = _now()
             for topic, lag in self.lag.items():
@@ -178,7 +190,11 @@ class Monitor:
         info = self.clients.http.get(f"http://{self.settings.trino_host}:{self.settings.trino_port}/v1/info").json()
         if info.get("starting"):
             return "degraded", "Trino is starting", info
-        return "healthy", f"Trino {info.get('nodeVersion', {}).get('version')} ready", {"version": info.get("nodeVersion")}
+        return (
+            "healthy",
+            f"Trino {info.get('nodeVersion', {}).get('version')} ready",
+            {"version": info.get("nodeVersion")},
+        )
 
 
 PROBE_SOURCES = {

@@ -2,8 +2,8 @@ import json
 import random
 
 from conftest import ORDERS_TOPIC, REPLAY_TOPIC, Batch, envelope, order
-from lakeflow_core.semantics import ChangeEvent, apply_plan, plan_batch
 
+from lakeflow_core.semantics import ChangeEvent, apply_plan, plan_batch
 from lakeflow_stream.sink import process_batch
 
 A = "3f2b8f7e-5d1a-4c9b-9f60-1a2b3c4d5e6f"
@@ -11,8 +11,10 @@ B = "9b2f1c3d-7e4a-4b5c-8d6e-0f1a2b3c4d5e"
 
 
 def silver(spark, table="silver.orders"):
-    return {r["order_id" if "orders" in table else "customer_id"]: r.asDict()
-            for r in spark.table(f"lakehouse.{table}").collect()}
+    return {
+        r["order_id" if "orders" in table else "customer_id"]: r.asDict()
+        for r in spark.table(f"lakehouse.{table}").collect()
+    }
 
 
 def bronze(spark):
@@ -106,8 +108,12 @@ def test_invalid_records_go_to_dlq_and_replay_resolves_them(ctx, spark):
 
     b = Batch(spark)
     headers = {"lakeflow-replay-of": violation["dlq_id"], "lakeflow-original-topic": "lakeflow.shop.orders"}
-    b.add(envelope("c", 300, after=order(A, amount="5.00")), key=json.dumps({"order_id": A}).encode(),
-          topic=REPLAY_TOPIC, headers=headers)
+    b.add(
+        envelope("c", 300, after=order(A, amount="5.00")),
+        key=json.dumps({"order_id": A}).encode(),
+        topic=REPLAY_TOPIC,
+        headers=headers,
+    )
     process_batch(ctx, b.df(), 1)
     resolved = [r for r in spark.table("lakehouse.ops.dlq_events").collect() if r["dlq_id"] == violation["dlq_id"]][0]
     assert (resolved["status"], resolved["replay_attempts"], resolved["resolved_batch_id"]) == ("replayed", 1, 1)
@@ -117,8 +123,14 @@ def test_invalid_records_go_to_dlq_and_replay_resolves_them(ctx, spark):
 def test_contract_v2_and_pii_handling(ctx, spark):
     b = Batch(spark)
     b.change("c", A, 100, order(A, channel="mobile"))
-    customer = {"customer_id": B, "email": "Ada@Example.com", "full_name": "Ada", "country": "GB",
-                "created_at": "2026-09-01T00:00:00Z", "updated_at": "2026-09-01T00:00:00Z"}
+    customer = {
+        "customer_id": B,
+        "email": "Ada@Example.com",
+        "full_name": "Ada",
+        "country": "GB",
+        "created_at": "2026-09-01T00:00:00Z",
+        "updated_at": "2026-09-01T00:00:00Z",
+    }
     b.change("c", B, 101, customer, table="customers")
     process_batch(ctx, b.df(), 0)
     orders = silver(spark)
@@ -136,7 +148,9 @@ def test_spark_matches_reference_model(ctx, spark):
     events = []
     for lsn in range(1001, 1031):
         pk = rng.choice(keys)
-        events.append((rng.choice(["c", "u", "u", "d"]), pk, lsn, order(pk, status=rng.choice(["PENDING", "PAID", "SHIPPED"]))))
+        events.append(
+            (rng.choice(["c", "u", "u", "d"]), pk, lsn, order(pk, status=rng.choice(["PENDING", "PAID", "SHIPPED"])))
+        )
     deliveries = events + rng.sample(events, 6)
     rng.shuffle(deliveries)
 
@@ -144,13 +158,16 @@ def test_spark_matches_reference_model(ctx, spark):
     for batch_id, start in enumerate(range(0, len(deliveries), 6)):
         b = Batch(spark)
         model_events = []
-        for op, pk, lsn, image in deliveries[start:start + 6]:
+        for op, pk, lsn, image in deliveries[start : start + 6]:
             b.change(op, pk, lsn, image, offset=offset)
-            model_events.append(ChangeEvent(f"{pk}-{lsn}", "shop.orders", pk, op, lsn, 1_790_000_000_000 + lsn,
-                                            ORDERS_TOPIC, 0, offset))
+            model_events.append(
+                ChangeEvent(f"{pk}-{lsn}", "shop.orders", pk, op, lsn, 1_790_000_000_000 + lsn, ORDERS_TOPIC, 0, offset)
+            )
             offset += 1
         record = process_batch(ctx, b.df(), batch_id)
-        model = plan_batch(batch_id, model_events, oracle_silver, oracle_bronze, watermark, ctx.settings.allowed_lateness_ms)
+        model = plan_batch(
+            batch_id, model_events, oracle_silver, oracle_bronze, watermark, ctx.settings.allowed_lateness_ms
+        )
         apply_plan(model, oracle_silver)
         oracle_bronze.update({e: batch_id for e in model.bronze_appends})
         watermark = model.watermark_after_ms
