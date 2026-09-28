@@ -105,7 +105,9 @@ is a property of the design, and the benchmark reports it.
 | Debezium connector restart | Resumes from its committed LSN; nothing is lost | `test_07` |
 | Schema evolution / contract drift | Additive v2 applied automatically; JPY rejected, then promoted in v3 and replayed | `test_08`, `test_09` |
 | Compaction while streaming | Content fingerprint of the rewrite equals its parent; the stream keeps committing | `test_compaction_while_streaming_preserves_content` |
-| Lost lakehouse row | A Debezium incremental snapshot (backfill) restores it | `test_backfill_restores_a_row_lost_from_the_lakehouse` |
+
+Backfill through Debezium incremental snapshots (`make backfill`, the `lakeflow_backfill` DAG) is implemented but
+**experimental**: its end-to-end test is marked as an expected failure until CI proves it.
 
 This is *effectively-once* state, not transactional exactly-once delivery. Kafka delivers at least once, and the
 sink makes every replay idempotent. The trade-offs are in

@@ -40,6 +40,9 @@ Each table prints one JSON record, and the command exits non-zero if any table f
 
 ## Backfill / repair (`lakeflow_backfill`, manual)
 
+> **Status: experimental.** The signal insert is tested, but the end-to-end restore test
+> (`test_backfill_restores_a_row_lost_from_the_lakehouse`) is still marked as an expected failure in CI.
+
 A backfill inserts a Debezium `execute-snapshot` signal into `lakeflow_ops.debezium_signal`. Debezium then runs an
 **incremental snapshot**: it reads the selected rows in chunks while streaming continues, dedups them against
 concurrent changes using watermarks, and emits them as `op = r` events. Those events use the normal contract

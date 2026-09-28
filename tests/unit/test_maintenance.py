@@ -111,6 +111,27 @@ class MaintenanceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             maintenance.maintain_table(FakeTrino(), "ops.batch_commits", tasks=["vacuum"])
 
+    def test_commit_conflicts_are_retried_but_other_errors_are_not(self):
+        calls = []
+
+        def flaky(sql, params=None):
+            calls.append(sql)
+            if len(calls) < 3:
+                raise RuntimeError("Failed to commit Iceberg update: CommitFailedException")
+            return []
+
+        maintenance._execute_with_retries(flaky, "ALTER TABLE t EXECUTE optimize", sleep=lambda _: None)
+        self.assertEqual(len(calls), 3)
+
+        def broken(sql, params=None):
+            calls.append(sql)
+            raise RuntimeError("line 1:1: mismatched input")
+
+        calls.clear()
+        with self.assertRaises(RuntimeError):
+            maintenance._execute_with_retries(broken, "ALTER", sleep=lambda _: None)
+        self.assertEqual(len(calls), 1)
+
 
 class BackfillTests(unittest.TestCase):
     def test_key_filtered_signal(self):

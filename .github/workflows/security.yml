@@ -1,0 +1,44 @@
+name: Security
+
+on:
+  push:
+    branches: ["**"]
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  secrets:
+    name: Secret scan (gitleaks, full history)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        run: >-
+          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/repo" zricethezav/gitleaks:v8.28.0
+          git /repo --redact --no-banner --log-opts="archive/v1-simulation..HEAD"
+
+  dependencies:
+    name: Dependency audit (pip-audit, npm audit)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+      - name: pip-audit (API + tooling)
+        run: |
+          pip install "pip-audit==$(grep -Po '(?<=^pip-audit==).*' requirements-dev.txt)"
+          pip-audit -r api/requirements.txt -r requirements-dev.txt --desc on --progress-spinner off
+      - name: npm audit (production dependencies)
+        working-directory: frontend
+        run: |
+          if [ -f package-lock.json ]; then npm audit --omit=dev --audit-level=high; else echo "no lockfile yet"; fi

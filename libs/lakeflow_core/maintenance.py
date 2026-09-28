@@ -149,6 +149,29 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+_CONFLICT_MARKERS = (
+    "conflict",
+    "commitfailed",
+    "cannot commit",
+    "failed to commit",
+    "has changed",
+    "validationexception",
+    "concurrent",
+)
+
+
+def _execute_with_retries(query: Query, sql: str, attempts: int = 6, sleep: Callable[[float], None] = time.sleep):
+    """Iceberg optimistic concurrency: a rewrite that loses a race with the stream's commit is simply retried."""
+    for attempt in range(1, attempts + 1):
+        try:
+            return query(sql, None)
+        except Exception as exc:
+            if attempt == attempts or not any(m in str(exc).lower() for m in _CONFLICT_MARKERS):
+                raise
+            sleep(min(2.0 * attempt, 10.0))
+    return None
+
+
 def maintain_table(
     query: Query,
     table: str,
@@ -181,7 +204,7 @@ def maintain_table(
                 snapshots_before=before["snapshots"],
             )
             if "optimize" in tasks:
-                query(sql["optimize"], None)
+                _execute_with_retries(query, sql["optimize"])
                 if before["last_commit"] is not None:
                     rewrite = query(
                         f"SELECT snapshot_id, parent_id FROM {qualified(table, '$snapshots')} "  # noqa: S608
@@ -196,7 +219,7 @@ def maintain_table(
                         )
             for task in ("expire_snapshots", "remove_orphan_files"):
                 if task in tasks:
-                    query(sql[task], None)
+                    _execute_with_retries(query, sql[task])
             after = file_stats(query, table)
             record.update(
                 data_files_after=after["data_files"],

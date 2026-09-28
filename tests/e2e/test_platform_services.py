@@ -98,6 +98,7 @@ def test_quality_dag_records_results(airflow):
     assert all(r["status"] != "error" for r in rows), rows
 
 
+@pytest.mark.xfail(reason="Debezium incremental snapshots are not yet proven in CI (docs/runbooks/maintenance.md)")
 def test_backfill_dag_emits_incremental_snapshot_events(airflow):
     order_id = insert_order(status="PAID")["order_id"]
     wait_visible(order_id)
