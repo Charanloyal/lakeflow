@@ -1,16 +1,37 @@
 version: 2
+# Monthly, grouped, minor/patch only: one PR per ecosystem. Major upgrades (for example Airflow 3, Node 26,
+# Python 3.14 images) are deliberate migrations with their own CI run, not bot PRs.
 updates:
   - package-ecosystem: pip
     directories: ["/api", "/", "/spark", "/airflow"]
-    schedule: { interval: weekly }
-    open-pull-requests-limit: 5
+    schedule: { interval: monthly }
+    open-pull-requests-limit: 1
+    groups:
+      python: { patterns: ["*"], update-types: ["minor", "patch"] }
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: npm
     directory: /frontend
-    schedule: { interval: weekly }
-    open-pull-requests-limit: 5
+    schedule: { interval: monthly }
+    open-pull-requests-limit: 1
+    groups:
+      frontend: { patterns: ["*"], update-types: ["minor", "patch"] }
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: docker
     directories: ["/api", "/frontend", "/spark", "/airflow", "/tests"]
-    schedule: { interval: weekly }
+    schedule: { interval: monthly }
+    open-pull-requests-limit: 1
+    groups:
+      images: { patterns: ["*"], update-types: ["minor", "patch"] }
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
   - package-ecosystem: github-actions
     directory: /
-    schedule: { interval: weekly }
+    schedule: { interval: monthly }
+    open-pull-requests-limit: 1
+    groups:
+      actions: { patterns: ["*"] }

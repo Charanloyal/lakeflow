@@ -2,7 +2,8 @@ name: Security
 
 on:
   push:
-    branches: ["**"]
+    branches: [main, lakeflow-v2]
+  pull_request:
   schedule:
     - cron: "17 5 * * 1"
   workflow_dispatch:

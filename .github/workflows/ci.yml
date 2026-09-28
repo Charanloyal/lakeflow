@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: ["**"]
+    branches: [main, lakeflow-v2]
   pull_request:
   workflow_dispatch:
 
@@ -196,7 +196,7 @@ jobs:
           mkdir -p test-results/screenshots
           npx playwright test
       - name: Build the recorded demo site
-        if: github.event_name != 'pull_request'
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         working-directory: frontend
         env:
           REPO_URL: ${{ github.server_url }}/${{ github.repository }}
@@ -209,7 +209,7 @@ jobs:
           cp -r test-results/screenshots out/screenshots 2>/dev/null || true
           touch out/.nojekyll
       - name: Publish the recorded demo to gh-pages
-        if: github.event_name != 'pull_request'
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

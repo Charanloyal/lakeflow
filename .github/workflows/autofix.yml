@@ -4,7 +4,7 @@ name: Autofix
 # for the frontend) and commits the result, like pre-commit.ci. CI on main only checks.
 on:
   push:
-    branches-ignore: [main]
+    branches-ignore: [main, gh-pages, "dependabot/**"]
 
 permissions:
   contents: write
