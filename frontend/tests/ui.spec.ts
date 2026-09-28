@@ -18,18 +18,22 @@ const recorded = new Map<string, unknown>();
 
 test.beforeEach(async ({ page }) => {
   if (!RECORD_DIR) return;
-  page.on("response", async (response) => {
-    const url = new URL(response.url());
-    const json = (response.headers()["content-type"] ?? "").includes("application/json");
-    const wanted = url.pathname.startsWith("/api/") && response.request().method() === "GET";
-    if (!wanted || response.status() !== 200 || !json) return;
-    try {
-      const body = await response.json();
-      recorded.set(url.pathname + url.search, body);
-      recorded.set(url.pathname, body);
-    } catch {
-      // body no longer available (the page navigated away)
+  // Intercept instead of listening: the body is captured before the page sees it, so navigation cannot lose it.
+  await page.route("**/api/**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (request.method() !== "GET" || url.pathname.endsWith("/live")) return route.fallback();
+    const response = await route.fetch();
+    if (response.status() === 200 && (response.headers()["content-type"] ?? "").includes("application/json")) {
+      try {
+        const body = await response.json();
+        recorded.set(url.pathname + url.search, body);
+        recorded.set(url.pathname, body);
+      } catch {
+        // not JSON after all; pass it through unrecorded
+      }
     }
+    await route.fulfill({ response });
   });
 });
 
@@ -129,6 +133,7 @@ test("screenshots of the remaining pages", async ({ page }) => {
   ]) {
     await page.goto(`/${name}/`);
     await expect(page.getByRole("heading", { name: heading, exact: true })).toBeVisible();
+    await page.waitForTimeout(3000); // let the page's data requests finish (screenshot + recorded demo)
     await page.screenshot({ path: `${SHOTS}/${name}.png`, fullPage: true });
   }
 });
