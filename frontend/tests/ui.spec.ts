@@ -25,7 +25,10 @@ test.beforeEach(async ({ page }) => {
     if (request.method() !== "GET" || url.pathname.endsWith("/live")) return route.fallback();
     try {
       const response = await route.fetch();
-      if (response.status() === 200 && (response.headers()["content-type"] ?? "").includes("application/json")) {
+      if (
+        response.status() === 200 &&
+        (response.headers()["content-type"] ?? "").includes("application/json")
+      ) {
         const body = await response.json();
         recorded.set(url.pathname + url.search, body);
         recorded.set(url.pathname, body);
