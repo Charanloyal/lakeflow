@@ -49,8 +49,9 @@ def test_01_initial_snapshot_reconciles_with_source():
         timeout=420,
         what="initial Debezium snapshot in silver.orders",
     )
-    assert check_value("orders.source_reconciliation") == 0
-    assert check_value("customers.source_reconciliation") == 0
+    # Kafka does not order across topics: the customers snapshot can land a few micro-batches after orders.
+    eventually(lambda: check_value("orders.source_reconciliation") == 0, timeout=180, what="orders reconciled")
+    eventually(lambda: check_value("customers.source_reconciliation") == 0, timeout=180, what="customers reconciled")
     assert check_value("customers.required_not_null") == 0
 
 
