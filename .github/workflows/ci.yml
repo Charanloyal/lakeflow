@@ -128,15 +128,19 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Build the image Render deploys (render.yaml)
-        run: docker build -f deploy/render/Dockerfile -t lakeflow-render .
-      - name: Smoke test
+        run: docker build -t lakeflow-render .
+      - name: Smoke test (proxies the published GitHub Pages demo)
         run: |
           docker run -d --name render -p 10000:10000 lakeflow-render
           for i in $(seq 1 30); do curl -fsS localhost:10000/healthz && break; sleep 1; done
           test "$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' localhost:10000/)" = "302 http://localhost:10000/lakeflow/"
+          test "$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' localhost:10000/lakeflow/quality)" \
+            = "301 http://localhost:10000/lakeflow/quality/"
           curl -fsS localhost:10000/lakeflow/ | grep -q "LakeFlow control plane"
           curl -fsS localhost:10000/lakeflow/snapshot/meta.json | python3 -m json.tool
           curl -fsSI localhost:10000/lakeflow/ | grep -qi "content-security-policy"
+      - if: failure()
+        run: docker logs render
 
   frontend:
     name: Frontend lint + typecheck + static build
