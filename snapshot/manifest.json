@@ -1,0 +1,23 @@
+{
+  "/api/auth/me": "r0000.json",
+  "/api/health/components": "r0001.json",
+  "/api/metrics/overview": "r0002.json",
+  "/api/trace/orders/662dc205-8db4-4e0f-96b5-9d85a322e967": "r0003.json",
+  "/api/events?limit=100&minutes=60&table=orders": "r0004.json",
+  "/api/events": "r0004.json",
+  "/api/topology": "r0005.json",
+  "/api/metrics/batches?limit=25": "r0006.json",
+  "/api/metrics/batches": "r0006.json",
+  "/api/quality/rejected?limit=50": "r0007.json",
+  "/api/quality/rejected": "r0007.json",
+  "/api/quality/freshness?minutes=60": "r0008.json",
+  "/api/quality/freshness": "r0008.json",
+  "/api/quality/summary": "r0009.json",
+  "/api/quality/schema": "r0010.json",
+  "/api/lineage/impact?dataset=postgres.shop.orders": "r0011.json",
+  "/api/lineage/impact": "r0011.json",
+  "/api/lineage": "r0012.json",
+  "/api/benchmarks/runs": "r0013.json",
+  "/api/recovery/actions": "r0014.json",
+  "/api/architecture/adrs": "r0015.json"
+}
