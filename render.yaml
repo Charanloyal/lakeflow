@@ -1,0 +1,16 @@
+# Render Blueprint: hosts the recorded demo (a static snapshot of a real CI end-to-end run) on the free plan.
+# The live stack needs about 6 GB of RAM (Kafka, Spark, Trino), so it runs in Codespaces or locally.
+# Same service name as v1, so the existing Blueprint updates the service in place.
+services:
+  - type: web
+    name: lakeflow-demo
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./deploy/render/Dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: 10000

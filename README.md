@@ -12,7 +12,7 @@ maintenance and Prometheus/Grafana.
 
 | | |
 |---|---|
-| **Recorded demo (no install):** https://charanloyal.github.io/lakeflow/ | The real UI, showing API responses captured from the real stack during the CI end-to-end run. It is read-only, says so on every page, and links the CI run that produced it. |
+| **Recorded demo (no install):** https://charanloyal.github.io/lakeflow/ (mirror: https://lakeflow-demo.onrender.com) | The real UI, showing API responses captured from the real stack during the CI end-to-end run. It is read-only, says so on every page, and links the CI run that produced it. The Render free plan (512 MB) cannot run Kafka, Spark and Trino, so Render serves the same recorded build ([`render.yaml`](render.yaml)). |
 | **Live stack in your browser:** [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/Charanloyal/lakeflow?quickstart=1) | A 4-core/16 GB Codespace starts the full stack automatically (about 8 minutes on first boot) and opens the UI. Log in with `admin` / `local-only-admin`. |
 | **Locally:** see the [5-minute quick start](#5-minute-quick-start) | Docker only. |
 

@@ -23,21 +23,22 @@ test.beforeEach(async ({ page }) => {
     const request = route.request();
     const url = new URL(request.url());
     if (request.method() !== "GET" || url.pathname.endsWith("/live")) return route.fallback();
-    const response = await route.fetch();
-    if (
-      response.status() === 200 &&
-      (response.headers()["content-type"] ?? "").includes("application/json")
-    ) {
-      try {
+    try {
+      const response = await route.fetch();
+      if (response.status() === 200 && (response.headers()["content-type"] ?? "").includes("application/json")) {
         const body = await response.json();
         recorded.set(url.pathname + url.search, body);
         recorded.set(url.pathname, body);
-      } catch {
-        // not JSON after all; pass it through unrecorded
       }
+      await route.fulfill({ response });
+    } catch {
+      // the page closed while a background poll was in flight; nothing left to answer
     }
-    await route.fulfill({ response });
   });
+});
+
+test.afterEach(async ({ page }) => {
+  if (RECORD_DIR) await page.unrouteAll({ behavior: "ignoreErrors" });
 });
 
 test.afterAll(() => {
