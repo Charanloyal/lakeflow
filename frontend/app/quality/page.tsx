@@ -127,7 +127,7 @@ export default function QualityPage() {
                 series={[
                   {
                     label: "p95",
-                    color: "#58a6ff",
+                    color: "#075985",
                     points: data.points.map((p) => ({
                       x: new Date(p.committed_at).getTime(),
                       y: p.freshness_p95_ms === null ? null : p.freshness_p95_ms / 1000,
@@ -135,7 +135,7 @@ export default function QualityPage() {
                   },
                   {
                     label: "p50",
-                    color: "#3fb950",
+                    color: "#166534",
                     points: data.points.map((p) => ({
                       x: new Date(p.committed_at).getTime(),
                       y: p.freshness_p50_ms === null ? null : p.freshness_p50_ms / 1000,

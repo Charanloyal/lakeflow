@@ -32,8 +32,8 @@ export function LineChart({
   return (
     <figure style={{ margin: 0 }}>
       <svg viewBox={`0 0 ${width} ${height}`} width="100%" role="img" aria-label={title}>
-        <line x1={pad} y1={height - pad} x2={width - pad} y2={height - pad} stroke="#253241" />
-        <text x={4} y={pad} fill="#a3b3c2" fontSize="10">
+        <line x1={pad} y1={height - pad} x2={width - pad} y2={height - pad} stroke="#4f6f88" />
+        <text x={4} y={pad} fill="#2c4a63" fontSize="10">
           {maxY.toFixed(1)} {unit}
         </text>
         {threshold ? (
@@ -43,10 +43,10 @@ export function LineChart({
               x2={width - pad}
               y1={sy(threshold.value)}
               y2={sy(threshold.value)}
-              stroke="#f85149"
+              stroke="#b91c1c"
               strokeDasharray="4 4"
             />
-            <text x={width - pad} y={sy(threshold.value) - 4} fill="#f85149" fontSize="10" textAnchor="end">
+            <text x={width - pad} y={sy(threshold.value) - 4} fill="#b91c1c" fontSize="10" textAnchor="end">
               {threshold.label}
             </text>
           </g>

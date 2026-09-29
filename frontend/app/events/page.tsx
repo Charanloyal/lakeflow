@@ -33,7 +33,7 @@ function Diff({
           const a = after?.[key];
           const changed = JSON.stringify(b) !== JSON.stringify(a);
           return (
-            <tr key={key} style={changed ? { background: "#58a6ff14" } : undefined}>
+            <tr key={key} style={changed ? { background: "#0369a11f" } : undefined}>
               <td className="mono">{key}</td>
               <td className="mono">{b === undefined ? "—" : String(b)}</td>
               <td className="mono">{a === undefined ? "—" : String(a)}</td>
