@@ -209,7 +209,8 @@ function SnapshotBanner({ provenance }: { provenance: SnapshotProvenance | null 
           {describeAge(provenance.ageDays ?? 0)}).{" "}
           {provenance.status === "stale" ? (
             <strong>
-              This recording is older than {SNAPSHOT_STALE_AFTER_DAYS} days; the code may have changed since.{" "}
+              This recording is older than {SNAPSHOT_STALE_AFTER_DAYS} days; the code may have changed
+              since.{" "}
             </strong>
           ) : null}
           <a href={meta.codespaces_url}>Run it live in Codespaces</a> · <a href={meta.repo_url}>Source</a>
