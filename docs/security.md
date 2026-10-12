@@ -13,7 +13,7 @@ LakeFlow is a local, single-node demo. This page states what is protected, how, 
 | Authorization | `viewer` can read; `admin` is required for demo mutations, DLQ replay, quality runs and fault injection. |
 | Fault injection | Bounded counts per action, and every action is audited in the control database. Injected records carry a `lakeflow-injection-id` header, so they never masquerade as real data. |
 | Input handling | Every query uses parameters. Identifiers come only from validated contracts. Backfill filters are structured (UUID keys, timestamps) and never raw SQL. |
-| PII | Contracts declare PII handling: `email` is HMAC-SHA256-pseudonymized with a per-install key, and `full_name` is dropped before the lakehouse. |
+| PII | Contracts declare PII handling: `email` is HMAC-SHA256-pseudonymized with a per-install key, and `full_name` is dropped before bronze and silver. The DLQ keeps the exact rejected bytes for replay, so it can hold direct PII. The API masks contract PII fields (and fields unknown to the contract) before showing DLQ payloads or PostgreSQL source rows (`lakeflow_core.redaction`). CI checks the recorded demo for secrets and unmasked PII before publishing it (`scripts/check_recorded_demo.py`). |
 | Web | nginx sends a strict CSP, `X-Content-Type-Options`, `Referrer-Policy` and `frame-ancestors 'none'`. The UI is a static export with no server-side rendering of user input. |
 | Supply chain | Every container image and Python/npm dependency is pinned. Spark jars are verified by SHA-1. |
 
@@ -21,6 +21,8 @@ LakeFlow is a local, single-node demo. This page states what is protected, how, 
 
 - TLS between services and at the edge, SSO/OIDC, secret managers and key rotation.
 - Multi-tenant isolation, row/column-level security in Trino, and encryption at rest for MinIO.
+- Retention and access control for the DLQ's raw bytes (`ops.dlq_events`). See the DLQ runbook.
+- Disabling the Recovery Lab outside the demo. `LAKEFLOW_RECOVERY_LAB_ENABLED` defaults to `true`.
 - Hardening of third-party admin UIs (Trino, Spark, Airflow, Grafana). They bind to localhost only.
 
 Report a vulnerability by opening a private security advisory on the GitHub repository.

@@ -4,6 +4,7 @@ import { Fragment, useEffect, useState } from "react";
 
 import { useShell } from "@/components/AppShell";
 import { Badge, Provenance, StateView } from "@/components/ui";
+import { SNAPSHOT } from "@/lib/api";
 import { formatBytes, formatNumber, formatTime } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
 import type { BatchesResponse, Topology } from "@/lib/types";
@@ -34,8 +35,10 @@ export default function PipelinePage() {
     <>
       <h1>Live pipeline</h1>
       <p className="subtitle">
-        PostgreSQL WAL → Debezium → Kafka → Spark → Iceberg → Trino. Status comes from the API health monitor
-        (10 s); the highlight follows live events from the stream.
+        PostgreSQL WAL → Debezium → Kafka → Spark → Iceberg → Trino.{" "}
+        {SNAPSHOT
+          ? "Status below is what the API health monitor reported when this demo was recorded, not the current state."
+          : "Status comes from the API health monitor (10 s); the highlight follows live events from the stream."}
       </p>
       <StateView
         loading={polled.loading && !topology}

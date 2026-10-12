@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "test:unit": "node --experimental-strip-types --test lib/provenance.test.mjs",
     "test:ui": "playwright test"
   },
   "dependencies": {

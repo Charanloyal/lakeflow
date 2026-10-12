@@ -2,6 +2,7 @@
 
 import { GuidedDemo } from "@/components/GuidedDemo";
 import { Badge, MetricCard, Provenance, StateView } from "@/components/ui";
+import { SNAPSHOT } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
 import type { ComponentsResponse, Overview } from "@/lib/types";
@@ -16,11 +17,15 @@ export default function OverviewPage() {
         <div>
           <h1>Overview</h1>
           <p className="subtitle">
-            Live health of the CDC path. Every number shows when it was measured and where it came from.
+            {SNAPSHOT
+              ? "Health of the CDC path as recorded during a CI run (not current). Every number shows when it was measured and where it came from."
+              : "Live health of the CDC path. Every number shows when it was measured and where it came from."}
           </p>
         </div>
         {overview.data ? (
-          <Badge status={overview.data.overall}>{`platform ${overview.data.overall}`}</Badge>
+          <Badge status={overview.data.overall}>
+            {SNAPSHOT ? `platform ${overview.data.overall} at capture` : `platform ${overview.data.overall}`}
+          </Badge>
         ) : null}
       </div>
 
@@ -74,7 +79,7 @@ export default function OverviewPage() {
       <GuidedDemo />
 
       <section className="panel" aria-labelledby="components-title">
-        <h2 id="components-title">Components</h2>
+        <h2 id="components-title">{SNAPSHOT ? "Components (status at capture time)" : "Components"}</h2>
         <StateView {...components}>
           {(data) => (
             <div className="table-wrap">

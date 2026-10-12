@@ -4,8 +4,9 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
-import { api, snapshotMeta, SNAPSHOT, type SnapshotMeta } from "@/lib/api";
+import { api, snapshotProvenance, SNAPSHOT, SNAPSHOT_STALE_AFTER_DAYS } from "@/lib/api";
 import { useLiveStream, type LiveStatus } from "@/lib/hooks";
+import { describeAge, type SnapshotProvenance } from "@/lib/provenance";
 import type { Identity, Topology } from "@/lib/types";
 
 import { Badge } from "./ui";
@@ -153,32 +154,15 @@ function Live({
     () => ({ identity, live, topology, events, batches }),
     [identity, live, topology, events, batches],
   );
-  const [meta, setMeta] = useState<SnapshotMeta | null>(null);
+  const [provenance, setProvenance] = useState<SnapshotProvenance | null>(null);
   useEffect(() => {
-    snapshotMeta()
-      .then(setMeta)
-      .catch(() => setMeta(null));
+    snapshotProvenance()
+      .then(setProvenance)
+      .catch(() => setProvenance(null));
   }, []);
   return (
     <Context.Provider value={value}>
-      {SNAPSHOT ? (
-        <div className="snapshot-banner" role="note" data-testid="snapshot-banner">
-          <strong>Recorded demo.</strong> Every value on these pages was captured from the real stack
-          (PostgreSQL, Debezium, Kafka, Spark, Iceberg, Trino) by the CI end-to-end run
-          {meta ? (
-            <>
-              {" "}
-              <a href={meta.run_url}>{meta.sha.slice(0, 7)}</a> at {meta.captured_at}
-            </>
-          ) : null}
-          . Nothing is simulated, nothing updates, and actions are disabled.{" "}
-          {meta ? (
-            <>
-              <a href={meta.codespaces_url}>Run it live in Codespaces</a> · <a href={meta.repo_url}>Source</a>
-            </>
-          ) : null}
-        </div>
-      ) : null}
+      {SNAPSHOT ? <SnapshotBanner provenance={provenance} /> : null}
       <header className="topbar">
         <Badge status="demo">{SNAPSHOT ? "Recorded CI snapshot" : "Local demo environment"}</Badge>
         <span className="provenance">
@@ -202,5 +186,40 @@ function Live({
         {children}
       </main>
     </Context.Provider>
+  );
+}
+
+/** Recorded demo banner: says what the pages are, when and from which commit/run they were captured. */
+function SnapshotBanner({ provenance }: { provenance: SnapshotProvenance | null }) {
+  const meta = provenance?.meta;
+  return (
+    <div
+      className="snapshot-banner"
+      role="note"
+      data-testid="snapshot-banner"
+      data-provenance={provenance?.status ?? "loading"}
+    >
+      <strong>Recorded demo, not a live system.</strong> Every value on these pages was captured from the real
+      stack (PostgreSQL, Debezium, Kafka, Spark, Iceberg, Trino) by a CI end-to-end run. Health, lag and
+      freshness show the state at capture time, not now. Nothing updates, and actions are disabled.{" "}
+      {meta && provenance ? (
+        <>
+          Captured from commit <a href={`${meta.repo_url}/commit/${meta.sha}`}>{meta.sha.slice(0, 7)}</a> by{" "}
+          <a href={meta.run_url}>this CI run</a>, finished at {meta.captured_at} (
+          {describeAge(provenance.ageDays ?? 0)}).{" "}
+          {provenance.status === "stale" ? (
+            <strong>
+              This recording is older than {SNAPSHOT_STALE_AFTER_DAYS} days; the code may have changed since.{" "}
+            </strong>
+          ) : null}
+          <a href={meta.codespaces_url}>Run it live in Codespaces</a> · <a href={meta.repo_url}>Source</a>
+        </>
+      ) : provenance ? (
+        <strong>
+          Capture provenance is {provenance.status} ({provenance.problems.join("; ")}), so the commit, CI run
+          and capture time cannot be shown.
+        </strong>
+      ) : null}
+    </div>
   );
 }

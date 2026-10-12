@@ -193,7 +193,11 @@ export default function QualityPage() {
                       </td>
                       <td>
                         <details>
-                          <summary>raw</summary>
+                          <summary>
+                            {r.raw_value_redaction && r.raw_value_redaction !== "none"
+                              ? `raw (PII ${r.raw_value_redaction})`
+                              : "raw"}
+                          </summary>
                           <pre>{r.raw_value}</pre>
                         </details>
                       </td>

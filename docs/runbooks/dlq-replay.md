@@ -12,6 +12,25 @@ The decoder never raises. It rejects a record with a reason code: `MALFORMED_JSO
 - the Kafka coordinates (`dlq_id` = sha256 of topic/partition/offset, so redelivery cannot create duplicates),
 - the violated contract rules and any `lakeflow-injection-id` header.
 
+## Privacy: the DLQ is a restricted quarantine
+
+A rejected record never passed contract validation, so its raw bytes still hold every field as the source sent
+it. That includes direct PII (`customers.email`, `full_name`) that bronze and silver hash or drop. Replay needs
+those exact bytes, so `ops.dlq_events` keeps them unchanged. The rules are:
+
+- **Display is masked.** `GET /api/quality/rejected` (and the UI, and therefore the recorded demo) passes every
+  payload through `lakeflow_core.redaction`:
+  - Contract direct-PII fields and fields unknown to the contract become `[redacted: …]`.
+  - Payloads that cannot be masked field by field are withheld when their contract has direct PII. That covers
+    unparseable or binary payloads and anything that is not a Debezium envelope.
+  - Orders payloads, which have no direct PII, are shown byte-exact.
+  - `raw_value_redaction` says which of these happened (`none`, `masked` or `withheld`).
+- **Replay is not affected.** It reads the stored bytes server-side and never uses the display copy.
+- **Direct table access is privileged.** Anyone with Trino access to `lakehouse.ops.dlq_events` can read the raw
+  bytes. The local demo has no table-level access control. A real deployment needs it, plus a retention rule
+  (for example, purge `replayed` rows after N days and alert on old `open` rows). **Neither is implemented
+  here.**
+
 ## Triage
 
 1. Open **Data Quality** and select the *Rejected records* tab, or query:

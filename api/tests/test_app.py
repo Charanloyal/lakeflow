@@ -1,6 +1,7 @@
 """FastAPI app tests with fake dependencies: auth, CSRF, validation, degradation, rate limits, OpenAPI."""
 
 import base64
+import json
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -259,3 +260,60 @@ def test_openapi_document_is_generated(client):
     spec = client.get("/api/openapi.json").json()
     assert "/api/trace/{table}/{key}" in spec["paths"]
     assert "/api/recovery/actions" in spec["paths"]
+
+
+SYNTHETIC_EMAIL = "synthetic.person.7731@example.invalid"
+SYNTHETIC_NAME = "Synthetic Sentinel Person"
+CUSTOMER_ID = "0b7e7c1e-2f7a-4c55-8f0e-6a1d2c3b4a59"
+
+
+def dlq_row(contract_name, raw_value):
+    return {
+        "dlq_id": "a" * 64,
+        "contract_name": contract_name,
+        "error_code": "CONTRACT_VIOLATION",
+        "raw_value": raw_value,
+    }
+
+
+def test_dlq_listing_masks_direct_pii_for_every_role(tmp_path):
+    client, ctx = make_client(tmp_path)
+    customer = {"customer_id": CUSTOMER_ID, "email": SYNTHETIC_EMAIL, "full_name": SYNTHETIC_NAME, "country": "DE"}
+    order_raw = '{"op": "c", "after": {"order_id": "o1", "status": "SHIPPED_TO_MARS"}}'
+    rows = [
+        dlq_row("customers", json.dumps({"op": "c", "before": None, "after": customer})),
+        dlq_row("customers", f'{{"after": {{"email": "{SYNTHETIC_EMAIL}"'),
+        dlq_row("orders", order_raw),
+    ]
+    ctx.clients.trino = lambda sql, params=None, timeout_s=20.0: ([dict(r) for r in rows], 1)
+    for who in (VIEWER, ADMIN):
+        response = client.get("/api/quality/rejected", headers=basic(who))
+        assert response.status_code == 200
+        assert SYNTHETIC_EMAIL not in response.text and SYNTHETIC_NAME not in response.text
+        records = response.json()["records"]
+        assert [r["raw_value_redaction"] for r in records] == ["masked", "withheld", "none"]
+        assert json.loads(records[0]["raw_value"])["after"]["customer_id"] == CUSTOMER_ID
+        assert records[2]["raw_value"] == order_raw, "payloads without direct PII stay byte-exact"
+
+
+def test_trace_masks_direct_pii_in_the_source_row(tmp_path):
+    client, ctx = make_client(tmp_path)
+    row = {"customer_id": CUSTOMER_ID, "email": SYNTHETIC_EMAIL, "full_name": SYNTHETIC_NAME, "country": "DE"}
+
+    class Result:
+        def fetchone(self):
+            return row
+
+    class Conn:
+        def execute(self, sql, params=None):
+            return Result()
+
+    @contextmanager
+    def source():
+        yield Conn()
+
+    ctx.clients.source = source
+    response = client.get(f"/api/trace/customers/{CUSTOMER_ID}", headers=basic(VIEWER))
+    assert response.status_code == 200, response.text
+    assert SYNTHETIC_EMAIL not in response.text and SYNTHETIC_NAME not in response.text
+    assert response.json()["source_state"]["customer_id"] == CUSTOMER_ID
