@@ -9,6 +9,7 @@ Then `make status` and `make logs SERVICE=<name>`.
 | `postgres` unhealthy right after a secrets change | Init scripts only run on an empty volume, so the roles still have the old passwords | `make clean` (deletes volumes), then `make up` |
 | `kafka-init` exits non-zero | A topic already exists with a different partition count after `topics.conf` changed | `make clean` for local data, or follow ADR-0001 for a planned repartition |
 | `connect-init` never reaches RUNNING | PostgreSQL auth, or the `lakeflow_cdc` publication is missing | `make logs SERVICE=connect`; check the `debezium` role in `.env` |
+| `minio-init` exits non-zero, or Spark logs `NoSuchBucketException` | The `warehouse` bucket could not be created (MinIO not ready, or credentials in `.env` do not match the MinIO volume) | `make logs SERVICE=minio-init`; `make clean` if `.env` was regenerated after the volume was created |
 | `spark` restarts in a loop | Catalog unreachable, or a bad contract file | `make logs SERVICE=spark`; contracts are validated at startup and on hot reload |
 | `trino` queries fail with S3 errors | MinIO credentials in `.env` do not match the `minio-data` volume | Restore the original `.env`, or `make clean` |
 | UI shows **Dependency unavailable** | The API reports which dependency failed; the UI never shows fake data instead | Fix that service; the page recovers on its next poll |

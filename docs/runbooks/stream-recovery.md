@@ -7,7 +7,7 @@ Alerts: `LakeFlowStreamDown`, `LakeFlowStreamStalled`, `LakeFlowConsumerLagHigh`
 
 | Check | Command | Healthy |
 |---|---|---|
-| Container state | `make status` | every service `running (healthy)`; `kafka-init`/`connect-init` `exited (0)` |
+| Container state | `make status` | every service `running (healthy)`; `kafka-init`/`connect-init`/`minio-init` `exited (0)` |
 | Connector | `curl -s localhost:8083/connectors/lakeflow-cdc/status` | connector and task `RUNNING` |
 | Spark query | `curl -s localhost:9108/metrics \| grep lakeflow_stream_query_active` | `1.0` |
 | Lag per topic | Overview page, or `lakeflow_consumer_lag_messages` in Prometheus | falls back toward 0 after bursts |

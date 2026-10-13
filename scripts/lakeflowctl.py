@@ -31,7 +31,7 @@ ENV_FILE = ROOT / ".env"
 ENV_EXAMPLE = ROOT / ".env.example"
 CORE_SERVICES = ["postgres", "kafka", "connect", "minio", "iceberg-rest", "spark", "trino", "api", "web"]
 DATA_PLANE = ["postgres", "kafka", "connect", "minio", "iceberg-rest", "spark", "trino"]
-ONE_SHOT = ["kafka-init", "connect-init"]
+ONE_SHOT = ["kafka-init", "connect-init", "minio-init"]
 PROFILE_SERVICES = {"observability": ["prometheus", "grafana"], "maintenance": ["airflow"]}
 HINTS = {
     "postgres": "Check `logs postgres`; an init-script error needs `down --volumes` (init only runs on an empty volume).",
@@ -40,6 +40,7 @@ HINTS = {
     "connect": "Kafka Connect waits for kafka-init; check `logs connect` for plugin or broker errors.",
     "connect-init": "The connector did not reach RUNNING; common causes are PostgreSQL auth or a missing publication.",
     "minio": "MinIO requires MINIO_ROOT_PASSWORD of >= 8 characters (bootstrap generates one).",
+    "minio-init": "Could not create the warehouse bucket; check `logs minio` and that .env matches the MinIO volume.",
     "iceberg-rest": "The REST catalog needs PostgreSQL (iceberg_catalog DB) and MinIO; check both are healthy.",
     "spark": "The stream needs Kafka topics and the REST catalog; `logs spark` shows the Python traceback.",
     "trino": "Trino needs ~1.2 GB; catalog errors usually mean MinIO credentials in .env do not match volumes.",
