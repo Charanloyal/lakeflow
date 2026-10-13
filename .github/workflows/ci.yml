@@ -54,6 +54,11 @@ jobs:
       - name: API tests (FastAPI TestClient, fake dependencies)
         if: matrix.python == '3.12'
         run: python -m pytest -q api/tests/test_app.py --junitxml=.artifacts/api.xml
+      - name: Suite outcomes (passed / failed / skipped / expected failures)
+        if: always()
+        run: |
+          python scripts/ci_annotate.py summary .artifacts/unit.xml "unit ${{ matrix.python }}"
+          if [ "${{ matrix.python }}" = "3.12" ]; then python scripts/ci_annotate.py summary .artifacts/api.xml api; fi
       - name: Annotate failures
         if: failure()
         run: |
@@ -74,6 +79,9 @@ jobs:
         run: |
           mkdir -p .artifacts && chmod 777 .artifacts
           docker compose --profile tools run --rm -v "$PWD/.artifacts:/artifacts" spark-tests --junitxml=/artifacts/spark.xml
+      - name: Suite outcomes
+        if: always()
+        run: python3 scripts/ci_annotate.py summary .artifacts/spark.xml spark
       - name: Annotate failures
         if: failure()
         run: python3 scripts/ci_annotate.py junit .artifacts/spark.xml spark
@@ -99,6 +107,16 @@ jobs:
         run: |
           mkdir -p .artifacts
           python3 scripts/lakeflowctl.py --profile 8gb integration-test tests/integration --junitxml=.artifacts/integration.xml -rA
+      - name: Suite outcomes (expected failures are listed, not hidden)
+        if: always()
+        run: python3 scripts/ci_annotate.py summary .artifacts/integration.xml integration
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: data-plane-reports
+          path: .artifacts/
+          if-no-files-found: ignore
       - name: Annotate failures
         if: failure()
         run: |
@@ -170,6 +188,8 @@ jobs:
           if ! npm run build > ../.build.txt 2>&1; then
             cat ../.build.txt; python3 ../scripts/ci_annotate.py lines error "next build" < ../.build.txt; exit 1
           fi
+      - name: Unit tests (recorded-demo provenance rules, node --test)
+        run: npm run test:unit
 
   full-stack:
     name: Full stack e2e, 16gb profile (API, UI, Airflow, Prometheus, Grafana)
@@ -215,16 +235,22 @@ jobs:
           set -a; . ../.env; set +a
           mkdir -p test-results/screenshots
           npx playwright test
-      - name: Build the recorded demo site
-        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+      - name: Record demo provenance and gate the recording (provenance, secrets, PII)
         working-directory: frontend
         env:
           REPO_URL: ${{ github.server_url }}/${{ github.repository }}
         run: |
+          # captured_at = when the Playwright recording step finished (UTC); the responses were captured during it.
           cat > public/snapshot/meta.json <<EOF
           {"sha": "${GITHUB_SHA}", "captured_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)", "run_url": "${CI_RUN_URL}",
-           "repo_url": "${REPO_URL}", "codespaces_url": "https://codespaces.new/${GITHUB_REPOSITORY}?quickstart=1"}
+           "repo_url": "${REPO_URL}", "codespaces_url": "https://codespaces.new/${GITHUB_REPOSITORY}?quickstart=1",
+           "mode": "recorded"}
           EOF
+          python3 ../scripts/check_recorded_demo.py public/snapshot --env ../.env
+      - name: Build the recorded demo site
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        working-directory: frontend
+        run: |
           NEXT_PUBLIC_SNAPSHOT=1 NEXT_PUBLIC_BASE_PATH="/${GITHUB_REPOSITORY#*/}" npm run build
           cp -r test-results/screenshots out/screenshots 2>/dev/null || true
           touch out/.nojekyll
@@ -240,7 +266,8 @@ jobs:
           git add -A
           git commit -q -m "Recorded demo from ${GITHUB_SHA::7} (${CI_RUN_URL})"
           git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages
-      - name: Upload screenshots and reports
+      # The recorded snapshot itself is not uploaded: it is only published after check_recorded_demo.py passes.
+      - name: Upload screenshots, reports and benchmark raw results
         if: always()
         uses: actions/upload-artifact@v7
         with:
@@ -248,7 +275,14 @@ jobs:
           path: |
             frontend/test-results
             frontend/playwright-report
+            .artifacts
+            benchmarks/results/*.json
           if-no-files-found: ignore
+      - name: Suite outcomes (expected failures are listed, not hidden)
+        if: always()
+        run: |
+          python3 scripts/ci_annotate.py summary .artifacts/e2e.xml e2e
+          python3 scripts/ci_annotate.py summary frontend/test-results/junit.xml ui
       - name: Annotate failures
         if: failure()
         run: |

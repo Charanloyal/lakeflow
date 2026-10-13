@@ -2,8 +2,8 @@
 
 import type { ReactNode } from "react";
 
-import { ApiError } from "@/lib/api";
-import { formatNumber, formatTime } from "@/lib/format";
+import { ApiError, SNAPSHOT } from "@/lib/api";
+import { formatDateTime, formatNumber, formatTime } from "@/lib/format";
 import type { Metric } from "@/lib/types";
 
 export function Badge({ status, children }: { status: string; children?: ReactNode }) {
@@ -21,7 +21,8 @@ export function Provenance({
 }) {
   return (
     <div className="provenance">
-      as of {formatTime(asOf ?? null)} · {source}
+      {/* A recorded value keeps its full capture date, so it cannot be mistaken for a current reading. */}
+      {SNAPSHOT ? `recorded ${formatDateTime(asOf ?? null)}` : `as of ${formatTime(asOf ?? null)}`} · {source}
       {windowLabel ? ` · window ${windowLabel}` : ""}
     </div>
   );

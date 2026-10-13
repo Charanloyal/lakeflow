@@ -1,19 +1,14 @@
 // Typed fetch wrapper. Session cookie auth (HttpOnly, SameSite=Strict); writes add the CSRF header.
 
+import { parseSnapshotMeta, staleAfterDays, type SnapshotProvenance } from "./provenance";
+
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
 export const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 /** Recorded demo (GitHub Pages): GET responses captured from the real stack in CI; writes are disabled. */
 export const SNAPSHOT = process.env.NEXT_PUBLIC_SNAPSHOT === "1";
+export const SNAPSHOT_STALE_AFTER_DAYS = staleAfterDays(process.env.NEXT_PUBLIC_SNAPSHOT_STALE_AFTER_DAYS);
 export const READ_ONLY_MESSAGE =
   "Recorded demo is read-only. Run the live stack (Codespaces or make up) to change data.";
-
-export interface SnapshotMeta {
-  sha: string;
-  captured_at: string;
-  run_url: string;
-  repo_url: string;
-  codespaces_url: string;
-}
 
 let manifest: Promise<Record<string, string>> | undefined;
 
@@ -31,10 +26,17 @@ async function snapshotGet<T>(path: string): Promise<T> {
   return (await response.json()) as T;
 }
 
-export async function snapshotMeta(): Promise<SnapshotMeta | null> {
+/** Capture provenance of the recorded demo; null on the live stack. Never throws. */
+export async function snapshotProvenance(): Promise<SnapshotProvenance | null> {
   if (!SNAPSHOT) return null;
-  const response = await fetch(`${BASE_PATH}/snapshot/meta.json`);
-  return response.ok ? ((await response.json()) as SnapshotMeta) : null;
+  let text: string | null = null;
+  try {
+    const response = await fetch(`${BASE_PATH}/snapshot/meta.json`, { cache: "no-store" });
+    text = response.ok ? await response.text() : null;
+  } catch {
+    text = null;
+  }
+  return parseSnapshotMeta(text, Date.now(), SNAPSHOT_STALE_AFTER_DAYS);
 }
 
 export class ApiError extends Error {

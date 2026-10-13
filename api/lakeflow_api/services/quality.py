@@ -13,8 +13,12 @@ from fastapi import HTTPException
 
 from lakeflow_core.contracts import check_backward_compatible, parse_contract
 from lakeflow_core.quality import RESULTS_DDL, build_checks, evaluate, results_insert
+from lakeflow_core.redaction import redact_dlq_payload
 
 log = logging.getLogger("lakeflow.quality")
+# Raw bytes are read in full enough to mask them reliably, then truncated for display.
+RAW_READ_CHARS = 65536
+RAW_DISPLAY_CHARS = 2000
 
 
 def _now() -> datetime:
@@ -79,11 +83,15 @@ def rejected(ctx, status: str | None, limit: int) -> dict:
     rows, _ = ctx.clients.trino(
         "SELECT dlq_id, first_seen_at, last_seen_at, kafka_topic, kafka_partition, kafka_offset, source_topic, "  # noqa: S608
         "contract_name, error_code, error_detail, violations, injection_id, status, replay_attempts, resolved_at, "
-        f"substr(raw_value, 1, 2000) AS raw_value FROM lakehouse.ops.dlq_events {where} "
+        f"substr(raw_value, 1, {RAW_READ_CHARS}) AS raw_value FROM lakehouse.ops.dlq_events {where} "
         f"ORDER BY first_seen_at DESC LIMIT {int(limit)}",
         params,
     )
-    return {"records": rows, "as_of": _now(), "source": "Trino: ops.dlq_events"}
+    for row in rows:
+        row["raw_value"], row["raw_value_redaction"] = redact_dlq_payload(
+            row.get("raw_value"), row.get("contract_name"), ctx.registry, RAW_DISPLAY_CHARS
+        )
+    return {"records": rows, "as_of": _now(), "source": "Trino: ops.dlq_events (direct PII masked for display)"}
 
 
 def _raw(text: str | None) -> bytes | None:

@@ -8,6 +8,8 @@ from datetime import datetime, timezone
 
 from fastapi import HTTPException
 
+from lakeflow_core.redaction import mask_row
+
 from ..domain.checkpoint import read_checkpoint
 from ..domain.trace import assemble
 
@@ -102,7 +104,8 @@ def trace(ctx, table: str, key: str) -> dict:
         table=table,
         key=key,
         mutation=_mutation(mutation),
-        source_row=_plain_row(source_row),
+        # The source row predates contract PII handling: show it the way the lakehouse may, never raw.
+        source_row=mask_row(_plain_row(source_row), ctx.registry, table)[0],
         kafka_events=kafka_events,
         bronze_rows=bronze_rows,
         dlq_rows=dlq_rows,

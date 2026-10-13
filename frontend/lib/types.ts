@@ -229,6 +229,8 @@ export interface DlqRecord {
   status: string;
   replay_attempts: number;
   raw_value: string | null;
+  /** How the API redacted raw_value for display; the exact bytes stay in ops.dlq_events for replay. */
+  raw_value_redaction?: "none" | "masked" | "withheld";
 }
 
 export interface DlqResponse {

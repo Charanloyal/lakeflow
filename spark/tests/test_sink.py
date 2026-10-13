@@ -1,9 +1,11 @@
 import json
 import random
 
+import pytest
 from conftest import ORDERS_TOPIC, REPLAY_TOPIC, Batch, envelope, order
 
 from lakeflow_core.semantics import ChangeEvent, apply_plan, plan_batch
+from lakeflow_stream import sink
 from lakeflow_stream.sink import process_batch
 
 A = "3f2b8f7e-5d1a-4c9b-9f60-1a2b3c4d5e6f"
@@ -90,6 +92,38 @@ def test_replayed_batch_after_crash_is_idempotent(ctx, spark):
     assert spark.table("lakehouse.ops.dlq_events").count() == dlq_before == 1
     assert (replay["applied"], replay["superseded"]) == (first["applied"], first["superseded"])
     assert batch_record(spark, 7)["attempts"] == 2
+
+
+def test_crash_between_silver_and_bronze_converges_on_replay(ctx, spark, monkeypatch):
+    """Partial progress: the silver MERGE committed, then the driver died before the bronze append.
+
+    Readers may briefly see silver ahead of bronze (no multi-table transaction); the replayed batch must
+    complete bronze with the original labels, leave silver unchanged and record a single attempt.
+    """
+    b = Batch(spark)
+    b.change("c", A, 100, order(A))
+    b.change("u", A, 101, order(A, status="SHIPPED"))
+    b.change("c", B, 102, order(B))
+    df = b.df()
+
+    def crash(*args, **kwargs):
+        raise RuntimeError("simulated driver crash after the silver commit")
+
+    real_bronze_rows = sink._bronze_rows
+    monkeypatch.setattr(sink, "_bronze_rows", crash)
+    with pytest.raises(RuntimeError, match="simulated driver crash"):
+        process_batch(ctx, df, 3)
+    partial = silver(spark)
+    assert partial[A]["status"] == "SHIPPED" and B in partial
+    assert bronze(spark) == {}, "bronze must not have been written yet"
+
+    monkeypatch.setattr(sink, "_bronze_rows", real_bronze_rows)
+    record = process_batch(ctx, df, 3)
+    assert (record["applied"], record["superseded"], record["stale"]) == (2, 1, 0), "labels must not change"
+    assert silver(spark) == partial
+    outcomes = sorted((r["source_lsn"], r["apply_outcome"]) for r in bronze(spark).values())
+    assert outcomes == [(100, "superseded"), (101, "applied"), (102, "applied")]
+    assert batch_record(spark, 3)["attempts"] == 1, "the crashed attempt never wrote its batch record"
 
 
 def test_out_of_order_event_is_stale(ctx, spark):

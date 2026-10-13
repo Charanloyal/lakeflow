@@ -135,6 +135,20 @@ services:
       timeout: 5s
       retries: 30
 
+  minio-init:
+    # Same image (it ships the `mc` client). Creates and verifies the warehouse bucket before the catalog starts.
+    image: bitnamilegacy/minio:2025.7.23-debian-12-r5
+    <<: *logging
+    entrypoint: ["bash", "/config/create-bucket.sh"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-lakeflow}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?run make bootstrap}
+      WAREHOUSE_BUCKET: warehouse
+    volumes: ["./platform/minio:/config:ro"]
+    depends_on: { minio: { condition: service_healthy } }
+    mem_limit: 256m
+    restart: "no"
+
   iceberg-rest:
     # Reference Iceberg REST catalog (JdbcCatalog on PostgreSQL). Production: Polaris, Glue, Unity, Nessie, Lakekeeper.
     image: tabulario/iceberg-rest:1.6.0
@@ -154,6 +168,7 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       minio: { condition: service_healthy }
+      minio-init: { condition: service_completed_successfully }
     mem_limit: ${ICEBERG_REST_MEM:-512m}
     healthcheck:
       test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8181 && printf 'GET /v1/config HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -q ' 200'"]

@@ -16,8 +16,14 @@ has to measure the real pipeline.
   mutation mix (60 % insert, 30 % update, 10 % delete), amounts, and statuses. Each iteration runs under its own
   generated customer, so it can be isolated and reconciled.
 - **Metrics (definitions):**
-  - *freshness* per event = bronze `committed_at` (Iceberg commit of its batch) − `source_ts` (PostgreSQL commit
-    time from Debezium `source.ts_ms`). Reported as p50/p95/p99/mean/stddev over all events of all iterations.
+  - *freshness* per event = sink time − `source_ts`. `source_ts` is the PostgreSQL commit time from Debezium
+    `source.ts_ms`, taken from the database server clock. The sink time is bronze `committed_at`. That value is
+    the Spark driver's wall clock, read right after the silver MERGE commits and *before* the bronze append
+    commits. It is therefore a **proxy** for the Iceberg commit of the batch. It slightly understates bronze
+    visibility (by the bronze write time) and approximates silver visibility. Both clocks run on the same Docker
+    host. Reported as p50/p95/p99/mean/stddev over all observed events of all iterations (event-weighted, not
+    an average of per-batch percentiles). Events that never arrive before the timeout are not in the
+    percentiles: they count as loss, and the loss gate is 0.
   - *throughput* = events observed ÷ (last commit − first source commit) per iteration. Reported as the
     mean/stddev/min across iterations.
   - *loss rate* = (expected changes − distinct bronze events) ÷ expected. *Duplicate rate* = duplicate bronze
@@ -30,7 +36,9 @@ has to measure the real pipeline.
   `maxOffsetsPerTrigger`, Iceberg write properties, and the CI run URL when available.
 - **Raw results** are versioned JSON (`benchmarks/results/*.json`, schema version 1) that contain every latency
   sample. The API and UI **recompute** summaries from those samples (`lakeflow_core.benchmark`). Summaries are
-  never stored separately, so a displayed number cannot drift from its evidence.
+  never stored separately, so a displayed number cannot drift from its evidence. CI uploads the raw files of
+  each run as the `ui-evidence` artifact. No result file is committed until one is published from a run that
+  was actually executed.
 - **CI regression gate** (`benchmarks/thresholds.json`): loss = 0, duplicates = 0, errors = 0, mismatches = 0,
   p95 freshness ≤ 60 s, throughput ≥ a deliberately low floor. Shared CI runners are noisy, so the gate catches
   breakage, not 10 % regressions.

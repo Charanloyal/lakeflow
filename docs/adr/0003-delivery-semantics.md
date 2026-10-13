@@ -54,12 +54,27 @@ path, so no state depends on the watermark.
 | Debezium restart | Changes after the last flushed LSN are re-emitted and counted as `duplicate`. [`e2e: connector restart`] |
 | Duplicate / out-of-order / late record injected | `duplicate` / `stale` / `is_late`. Silver unchanged. [`test_duplicates_are_stored_once`, `test_out_of_order_event_is_stale`] |
 | Malformed or contract-violating record | DLQ with a reason code. The stream continues (poison-pill safe decoder). [`test_invalid_records_go_to_dlq...`] |
-| Kafka retention exceeded before processing | `failOnDataLoss=true` stops the query loudly. Recover with the backfill DAG (incremental snapshot). |
+| Kafka retention exceeded before processing | `failOnDataLoss=true` stops the query loudly. Recover with the backfill DAG (incremental snapshot, **experimental**) or a full re-snapshot; see the stream-recovery runbook. |
 | Replication slot lag | `max_slot_wal_keep_size=2GB` protects the source disk. The heartbeat keeps the slot advancing while tables are idle. Lag is exported as a metric. |
 
 ## Consequences
 - Correctness needs a strictly increasing per-row source ordering key. PostgreSQL LSNs provide it, because row
   locks serialize changes to a row. Other sources need an equivalent key, such as a version column.
+- **Source identity is assumed stable.** LSNs are only comparable within one PostgreSQL cluster history. If the
+  source is recreated or restored to a different history (new cluster, `pg_upgrade` into a fresh cluster,
+  restored volume) while the lakehouse is kept, new LSNs can be lower than those in silver. Every change to an
+  existing key is then classified `stale` and silently not applied. This is unsupported. It requires a
+  lakehouse rebuild (`tests/unit/test_semantics.py` characterizes it; see the stream-recovery runbook).
+- **Equal LSNs.** Snapshot reads (`op = r`) carry the snapshot or stream position as their LSN, so several keys
+  can share one LSN. Identity still differs per key. For one key, an equal LSN is broken by the Kafka offset
+  within the batch, and across batches it is `stale` (never re-applied). Both events describe the same committed
+  row state.
+- **Commit boundaries are per table, not one transaction.** One micro-batch commits, in order: the silver MERGE
+  per contract table, then the bronze append, then the DLQ MERGE, then the batch record, then Spark's
+  `commits/N`. A crash between any two leaves readers with temporarily inconsistent tables (for example, silver
+  ahead of bronze). The replayed batch converges every table to the same final state with the original labels
+  (`PartialCommitTests`, `test_crash_between_silver_and_bronze_converges_on_replay`). Multi-table atomicity is
+  not claimed.
 - Each batch reads the bronze partitions and silver keys it touches. That cost grows with table size and is
   bounded by the bronze day partitioning, the event_id bloom filter, and silver bucketing.
 - A wiped checkpoint replays Kafka from `earliest`. That is safe because of the rules above, but labels are

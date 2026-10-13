@@ -2,6 +2,7 @@
 """Turn CI evidence into GitHub annotations (readable via the check-runs API without log access).
 
 python scripts/ci_annotate.py junit <report.xml> [title]
+python scripts/ci_annotate.py summary <report.xml> [title]   # outcome counts, also to $GITHUB_STEP_SUMMARY
 python scripts/ci_annotate.py lines <level> <title> < text
 python scripts/ci_annotate.py compose [--profile 8gb]
 """
@@ -9,6 +10,7 @@ python scripts/ci_annotate.py compose [--profile 8gb]
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import xml.etree.ElementTree as ET  # noqa: S405 - parsing our own JUnit output
@@ -55,6 +57,45 @@ def junit(path: str, prefix: str = "test") -> None:
     emit("notice", f"{prefix} summary", f"{total} tests, {failures} failed/errored")
 
 
+def junit_outcomes(path: str) -> dict[str, int]:
+    """Per-outcome counts from a pytest JUnit report. Expected failures are reported apart from plain skips."""
+    root = ET.parse(path).getroot()  # noqa: S314 - trusted local file
+    counts = {"tests": 0, "passed": 0, "failed": 0, "errors": 0, "skipped": 0, "xfailed": 0}
+    for case in root.iter("testcase"):
+        counts["tests"] += 1
+        skipped = case.find("skipped")
+        if case.find("failure") is not None:
+            counts["failed"] += 1
+        elif case.find("error") is not None:
+            counts["errors"] += 1
+        elif skipped is not None and skipped.get("type") == "pytest.xfail":
+            counts["xfailed"] += 1
+        elif skipped is not None:
+            counts["skipped"] += 1
+        else:
+            counts["passed"] += 1
+    return counts
+
+
+def summary(path: str, title: str = "tests") -> None:
+    """Make skips and expected failures visible: a green job does not mean every test ran."""
+    if not Path(path).exists():
+        line = f"| {title} | report not produced | | | | |"
+        emit("warning", f"{title}: no report", f"{path} was not produced")
+    else:
+        c = junit_outcomes(path)
+        line = f"| {title} | {c['passed']} | {c['failed'] + c['errors']} | {c['skipped']} | {c['xfailed']} | {c['tests']} |"
+        emit("notice", f"{title} outcomes", json.dumps(c))
+    target = os.environ.get("GITHUB_STEP_SUMMARY")
+    if target:
+        new = not Path(target).exists() or Path(target).stat().st_size == 0
+        with open(target, "a", encoding="utf-8") as handle:
+            if new:
+                handle.write("| Suite | Passed | Failed/errors | Skipped | Expected failures | Total |\n")
+                handle.write("|---|---|---|---|---|---|\n")
+            handle.write(line + "\n")
+
+
 def lines(level: str, title: str) -> None:
     text = sys.stdin.read().strip()
     if text:
@@ -94,6 +135,8 @@ if __name__ == "__main__":
     command = sys.argv[1]
     if command == "junit":
         junit(sys.argv[2], sys.argv[3] if len(sys.argv) > 3 else "test")
+    elif command == "summary":
+        summary(sys.argv[2], sys.argv[3] if len(sys.argv) > 3 else "tests")
     elif command == "lines":
         lines(sys.argv[2], sys.argv[3])
     elif command == "compose":
