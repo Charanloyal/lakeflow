@@ -39,9 +39,7 @@ class ComposeStartupTests(unittest.TestCase):
 
     def test_catalog_waits_for_the_warehouse_bucket(self):
         # Regression: MinIO reported healthy before the bucket existed and Spark crash-looped on NoSuchBucket.
-        self.assertRegex(
-            self.services["iceberg-rest"], r"minio-init: \{ condition: service_completed_successfully \}"
-        )
+        self.assertRegex(self.services["iceberg-rest"], r"minio-init: \{ condition: service_completed_successfully \}")
         self.assertIn("minio: { condition: service_healthy }", self.services["minio-init"])
 
     def test_bucket_created_by_init_is_the_catalog_warehouse(self):
