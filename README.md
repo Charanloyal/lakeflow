@@ -1,22 +1,29 @@
 # LakeFlow: CDC lakehouse with verifiable delivery semantics
 
-**LakeFlow streams every change in a PostgreSQL database into an Apache Iceberg lakehouse within seconds.**
-Duplicates, retries, crashes, late events and schema drift must not corrupt the result. The project also
-ships the tests, benchmarks and UI that prove that claim. The path is PostgreSQL → Debezium → Kafka → Spark
-Structured Streaming → Iceberg on MinIO → Trino. Around it sit a FastAPI + Next.js control plane, Airflow
+**LakeFlow streams every change in a PostgreSQL database into an Apache Iceberg lakehouse in 5-second
+micro-batches.** Duplicates, retries, crashes, late events and schema drift must not corrupt the result. The
+project also ships the tests, benchmarks and UI that check that claim. The path is PostgreSQL → Debezium → Kafka
+→ Spark Structured Streaming → Iceberg on MinIO → Trino. Around it sit a FastAPI + Next.js control plane, Airflow
 maintenance and Prometheus/Grafana.
+
+**Status:** a working single-node learning and portfolio project, not a production deployment. The source data
+is synthetic (50 generated customers and 200 orders, plus a seeded benchmark workload). Backfill is experimental.
+The CI data-plane job is not reliably green yet: on commit `29847ea` it passed in the `lakeflow-v2` push run and
+failed at stack startup (Iceberg tables never created) in the `main` push run, so check the badge before relying
+on it.
 
 [![CI](https://github.com/Charanloyal/lakeflow/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Charanloyal/lakeflow/actions/workflows/ci.yml)
 
-**Demo: https://lakeflow-demo.onrender.com/lakeflow/** (a recording of a real CI end-to-end run, [details](#demo))
+**Demo: https://lakeflow-demo.onrender.com/lakeflow/** (mirror: https://charanloyal.github.io/lakeflow/), a
+read-only recording of a real CI end-to-end run ([details](#demo))
 
 ## Demo
 
 | | |
 |---|---|
 | **Recorded demo (no install):** https://lakeflow-demo.onrender.com/lakeflow/ (also on GitHub Pages: https://charanloyal.github.io/lakeflow/) | The real UI, showing API responses captured from the real stack during the CI end-to-end run. It is read-only, says so on every page, and links the CI run that produced it. The Render free plan (512 MB) cannot run Kafka, Spark and Trino, so Render mirrors the recorded build ([`render.yaml`](render.yaml)). Its free instance sleeps when idle, so the first load can take about a minute. |
-| **Live stack in your browser:** [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/Charanloyal/lakeflow?quickstart=1) | A 4-core/16 GB Codespace starts the full stack automatically (about 8 minutes on first boot) and opens the UI. Log in with `admin` / `local-only-admin`. |
-| **Locally:** see the [5-minute quick start](#5-minute-quick-start) | Docker only. |
+| **Live stack in your browser:** [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/Charanloyal/lakeflow?quickstart=1) | A 4-core/16 GB Codespace starts the full stack automatically (the first boot builds images and takes several minutes; the start-up timeout is 25 minutes) and opens the UI. Log in with `admin` / `local-only-admin`. |
+| **Locally:** see the [quick start](#quick-start) | Docker only. |
 
 ![Overview page, captured by Playwright in CI](https://charanloyal.github.io/lakeflow/screenshots/overview.png)
 
@@ -44,7 +51,7 @@ flowchart LR
   [`libs/lakeflow_core`](libs/lakeflow_core/) validates every event, and Spark, the API and the tests all use that
   decoder.
 
-## 5-minute quick start
+## Quick start
 
 Requirements: Docker with at least 6 GB of memory (`8gb` profile) or 11 GB (`16gb` profile, which adds Airflow,
 Prometheus and Grafana).
@@ -59,6 +66,19 @@ Open http://localhost:8080 and log in as `admin` / `local-only-admin`. Every por
 Without `make` (for example on Windows), use `python scripts/lakeflowctl.py <command>`.
 `make test`, `make integration-test`, `make benchmark`, `make maintenance` and `make down` do what their names
 say.
+
+## Testing
+
+| Suite | Command | Needs |
+|---|---|---|
+| Core library unit tests (stdlib `unittest`) | `python scripts/lakeflowctl.py test --unit-only` | Python 3.10+ only, no Docker |
+| Same suites as the CI `python` job | `python -m pytest -q tests/unit api/tests/test_domain.py` | `pip install -r requirements-dev.txt` |
+| API tests (FastAPI TestClient, fake dependencies) | `python -m pytest -q api/tests/test_app.py` | `pip install -r api/requirements.txt` |
+| Unit + API + PySpark sink tests + Airflow DAG parse | `make test` | Docker (runs in containers) |
+| Integration and end-to-end tests | `make integration-test` | the running stack (`make up`) |
+
+CI ([`ci.yml`](.github/workflows/ci.yml)) runs all of these, plus `promtool` alert-rule tests, the frontend lint
+and build, the Playwright UI tests and the benchmark against the full Docker Compose stack.
 
 ## Walkthrough (what to click)
 
@@ -78,7 +98,8 @@ say.
 
 ## Benchmarks
 
-`make benchmark` (and CI, on every push) runs a **seeded workload of real PostgreSQL transactions**: 60 % insert,
+`make benchmark` (and CI's full-stack job, on pushes to `main` and on pull requests) runs a **seeded workload of
+real PostgreSQL transactions**: 60 % insert,
 30 % update, 10 % delete, isolated per iteration by its own customer. It measures only what arrives in Iceberg,
 reading it back through Trino ([ADR-0005](docs/adr/0005-benchmark-methodology.md)).
 
@@ -93,12 +114,15 @@ reading it back through Trino ([ADR-0005](docs/adr/0005-benchmark-methodology.md
 The numbers depend on hardware, so this README deliberately contains none. Every run stores its environment (CPU,
 memory, container limits, trigger interval, partitions, Iceberg properties, CI run URL) and every raw latency
 sample in `benchmarks/results/*.json`. The **Benchmarks** page recomputes all summaries from those samples.
+No result files are committed yet (`benchmarks/results/` holds only `.gitkeep`), and CI does not upload the raw
+JSON as an artifact. The only published run is the one captured in the recorded demo's Benchmarks page (a single
+CI run on a shared GitHub-hosted runner, so treat it as a smoke test, not a capacity claim).
 Local-mode Spark with a 5 s trigger puts a floor of roughly one trigger interval plus commit time on freshness. That
 is a property of the design, and the benchmark reports it.
 
 ## Reliability: what is guaranteed, and how it is proven
 
-| Failure | Behavior | Proof (executed in CI against the real stack) |
+| Failure | Behavior | Test (runs in CI against the real stack; see the status note above) |
 |---|---|---|
 | Kafka redelivery / duplicate events | Bronze keeps one row per `event_id`; silver is unchanged | `test_03_redelivered_events_are_absorbed` |
 | Out-of-order or late update | The LSN guard rejects it as `stale`; it is stored in bronze for audit | `test_04_out_of_order_update_is_stale_and_late` |
