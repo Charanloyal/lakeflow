@@ -1,5 +1,5 @@
 # Streaming job image: official Apache Spark + pinned, checksum-verified connector jars.
-FROM spark:3.5.7-scala2.12-java17-python3-ubuntu AS runtime
+FROM spark:3.5.9-scala2.12-java17-python3-ubuntu AS runtime
 
 USER root
 ARG ICEBERG_VERSION=1.9.2
